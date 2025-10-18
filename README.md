@@ -10,7 +10,40 @@ Focus areas: ownership, traits, error handling, serialization, and CLI design.
 - `accounts.rs` → account models and balances  
 - `instructions.rs` → core operations (`transfer`, `mint`, `burn`)  
 - `errors.rs` → custom error definitions  
-- `main.rs` → program entrypoint  
+- `main.rs` → program entrypoint
+
+## Current status
+
+### `Account` Struct implemented
+
+The struct `Account` contains the Public Key of the account and the Balance.
+
+#### Implementations `impl Account`
+
+```rust
+pub fn new() -> Self
+```
+Creates a new account with a generated keypair and zero balance.
+
+```rust
+pub fn from_private_key(private_key_bytes: &[u8; 32]) -> Self
+```
+Creates an account from an existing private key.
+
+```rust
+pub fn show(&self)
+```
+Displays account information
+
+```rust
+pub fn deposit(&mut self, amount:u64) -> Result<(u64, &VerifyingKey, &u64), &'static str>
+```
+Deposits an amount into the account. Returns a `Result` with either a tuple with the deposit information or and error message.
+
+```rust
+pub fn withdraw(&mut self, amount: u64) -> Result<(u64, &VerifyingKey, &u64), &'static str>
+```
+Withdraw an amount from account. Returns a `Result` with either a tuple with the withdraw information or and error message.
 
 ## Goal
 To master Rust through practical development before moving to on-chain programs with Anchor on Solana.

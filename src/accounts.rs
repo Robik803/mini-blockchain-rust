@@ -1,17 +1,15 @@
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Account {
-    pub public_key : VerifyingKey,
-    pub balance : u64,
+    pub public_key: VerifyingKey,
+    pub balance: u64,
 }
 
 impl Account {
-
     /// Create a new account with a generated keypair and zero balance
     pub fn new() -> Self {
-
         // Generate a new keypair
         let mut csprng = OsRng;
         let keypair: SigningKey = SigningKey::generate(&mut csprng);
@@ -24,7 +22,7 @@ impl Account {
         println!("Private Key: {:?}", private_key);
 
         Self {
-            public_key: public_key,
+            public_key,
             balance: 0,
         }
     }
@@ -35,7 +33,7 @@ impl Account {
         let public_key = signing_key.verifying_key();
 
         Self {
-            public_key: public_key,
+            public_key,
             balance: 0,
         }
     }
@@ -47,7 +45,7 @@ impl Account {
     }
 
     /// Deposit an amount into the account
-    pub fn deposit(&mut self, amount:u64) -> Result<(u64, &VerifyingKey, &u64), &'static str>{
+    pub fn deposit(&mut self, amount: u64) -> Result<(u64, &VerifyingKey, &u64), &'static str> {
         if amount == 0 {
             return Err("Cannot deposit a null amount.");
         }
@@ -56,7 +54,7 @@ impl Account {
     }
 
     /// Withdraw an amount from account
-    pub fn withdraw(&mut self, amount:u64) -> Result<(u64, &VerifyingKey, &u64), &'static str>{
+    pub fn withdraw(&mut self, amount: u64) -> Result<(u64, &VerifyingKey, &u64), &'static str> {
         if amount == 0 {
             return Err("Cannot withdraw a null amount.");
         }
@@ -64,17 +62,21 @@ impl Account {
             Some(new_balance) => {
                 self.balance = new_balance;
                 Ok((amount, &self.public_key, &self.balance))
-            },
-            None => Err("Insufficient funds...")
+            }
+            None => Err("Insufficient funds..."),
         }
     }
-
 }
 
 //Adding the trait Display to Account
 impl std::fmt::Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Account {{ public_key: {:?} -> balance: {} }}", self.public_key.as_bytes(), self.balance)
+        write!(
+            f,
+            "Account {{ public_key: {:?} -> balance: {} }}",
+            self.public_key.as_bytes(),
+            self.balance
+        )
     }
 }
 
@@ -95,57 +97,92 @@ mod tests {
         let private_key_bytes: [u8; 32] = [0u8; 32]; // Example private key (not secure)
         let account1 = Account::from_private_key(&private_key_bytes);
         let account2 = Account::from_private_key(&private_key_bytes);
-        assert_eq!(account1.public_key.as_bytes(), account2.public_key.as_bytes());
+        assert_eq!(
+            account1.public_key.as_bytes(),
+            account2.public_key.as_bytes()
+        );
         assert_eq!(account2.balance, 0);
     }
 
+    fn make_deposit(account: &mut Account, amount: u64) {
+        match account.deposit(amount) {
+            Ok((amount, public_key, balance)) => {
+                println!(
+                    "Transaction completed. {} RBK deposited into the account {:?}",
+                    amount,
+                    public_key.as_bytes()
+                );
+                println!("New balance : {} RBK", balance)
+            }
+            Err(e) => println!("error in transaction : {e:?}"),
+        }
+    }
+
+    fn make_withdraw(account: &mut Account, amount: u64) {
+        match account.withdraw(amount) {
+            Ok((amount, public_key, balance)) => {
+                println!(
+                    "Transaction completed. {} RBK withdrawn from the account {:?}",
+                    amount,
+                    public_key.as_bytes()
+                );
+                println!("New balance : {} RBK", balance)
+            }
+            Err(e) => println!("error in transaction : {e:?}"),
+        }
+    }
+
     #[test]
-    fn test_deposit(){
+    fn test_deposit() {
         let mut account = Account::new();
-        let amount1: u64 = 30;
-        let amount2: u64 = 50;
-        assert_eq!(account.deposit(0),Err("Cannot deposit a null amount."));
-        match account.deposit(amount1) {
-            Ok((amount, public_key, balance)) => {
-                println!("Transaction completed. {} RBK deposited into the account {:?}", amount, public_key.as_bytes());
-                println!("New balance : {}RBK", balance)},
-            Err(e) => println!("error in transaction : {e:?}")
-        }
+
+        make_deposit(&mut account, 0);
+        assert_eq!(account.balance, 0);
+
+        make_deposit(&mut account, 30);
         assert_eq!(account.balance, 30);
-        match account.deposit(amount2) {
-            Ok((amount, public_key, balance)) => {
-                println!("Transaction completed. {} RBK deposited into the account {:?}", amount, public_key.as_bytes());
-                println!("New balance : {}RBK", balance)
-            },
-            Err(e) => println!("error in transaction : {e:?}")
-        }
+
+        make_deposit(&mut account, 50);
         assert_eq!(account.balance, 80);
     }
 
     #[test]
-    fn test_withdraw(){
+    fn test_withdraw() {
         let mut account = Account::new();
-        let initial_amount: u64 = 100;
-        let withdraw1: u64 = 50;
-        let withdraw2: u64 = 120;
-        _ = account.deposit(initial_amount);
-        assert_eq!(account.withdraw(0),Err("Cannot withdraw a null amount."));
-        match account.withdraw(withdraw1) {
-            Ok((amount, public_key, balance)) => {
-                println!("Transaction completed. {} RBK withdrawn from the account {:?}", amount, public_key.as_bytes());
-                println!("New balance : {}RBK", balance)},
-            Err(e) => println!("error in transaction : {e:?}")
-        }
+
+        make_deposit(&mut account, 100);
+        make_withdraw(&mut account, 0);
+        assert_eq!(account.balance, 100);
+
+        make_withdraw(&mut account, 50);
         assert_eq!(account.balance, 50);
-        match account.withdraw(withdraw2) {
-            Ok((amount, public_key, balance)) => {
-                println!("Transaction completed. {} RBK deposited into the account {:?}", amount, public_key.as_bytes());
-                println!("New balance : {}RBK", balance)
-            },
-            Err(e) => println!("error in transaction : {e:?}")
-        }
+
+        make_withdraw(&mut account, 120);
         assert_eq!(account.balance, 50);
     }
+
+    #[test]
+    fn test_multiaccount_transactions() {
+        let mut alice = Account::new();
+        let mut bob = Account::new();
+
+        make_deposit(&mut alice, 20);
+        make_deposit(&mut bob, 30);
+        assert_eq!(alice.balance, 20);
+        assert_eq!(bob.balance, 30);
+
+        make_deposit(&mut alice, 0);
+        make_withdraw(&mut alice, 0);
+        assert_eq!(alice.balance, 20);
+
+        make_deposit(&mut alice, 50);
+        make_withdraw(&mut alice, 45);
+        assert_eq!(alice.balance, 25);
+
+        let transfer: u64 = 7;
+        make_deposit(&mut alice, transfer);
+        make_withdraw(&mut bob, transfer);
+        assert_eq!(alice.balance, 32);
+        assert_eq!(bob.balance, 23);
+    }
 }
-
-
