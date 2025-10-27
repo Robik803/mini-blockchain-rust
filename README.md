@@ -14,7 +14,7 @@ Focus areas: ownership, traits, error handling, serialization, and CLI design.
 
 ## Current status
 
-### `Account` Struct implemented
+### `Account` Struct
 
 The struct `Account` contains the Public Key of the account and the Balance.
 

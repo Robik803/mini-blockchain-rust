@@ -1,35 +1,7 @@
 mod accounts;
 mod errors;
 mod instructions;
-use accounts::Account;
-
-fn make_deposit(account: &mut Account, amount: u64) {
-    match account.deposit(amount) {
-        Ok((amount, public_key, balance)) => {
-            println!(
-                "Transaction completed. {} RBK deposited into the account {:?}",
-                amount,
-                public_key.as_bytes()
-            );
-            println!("New balance : {} RBK", balance)
-        }
-        Err(e) => println!("error in transaction : {e:?}"),
-    }
-}
-
-fn make_withdraw(account: &mut Account, amount: u64) {
-    match account.withdraw(amount) {
-        Ok((amount, public_key, balance)) => {
-            println!(
-                "Transaction completed. {} RBK withdrawn from the account {:?}",
-                amount,
-                public_key.as_bytes()
-            );
-            println!("New balance : {} RBK", balance)
-        }
-        Err(e) => println!("error in transaction : {e:?}"),
-    }
-}
+use accounts::{Account, make_deposit, make_withdraw};
 
 fn main() {
     let mut alice = Account::new();

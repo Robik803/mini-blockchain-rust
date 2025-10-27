@@ -68,6 +68,36 @@ impl Account {
     }
 }
 
+///Make a deposit of an amount into an account
+pub fn make_deposit(account: &mut Account, amount: u64) {
+    match account.deposit(amount) {
+        Ok((amount, public_key, balance)) => {
+            println!(
+                "Transaction completed. {} RBK deposited into the account {:?}",
+                amount,
+                public_key.as_bytes()
+            );
+            println!("New balance : {} RBK", balance)
+        }
+        Err(e) => println!("error in transaction : {e:?}"),
+    }
+}
+
+///Make a withdraw of an amount from an account
+pub fn make_withdraw(account: &mut Account, amount: u64) {
+    match account.withdraw(amount) {
+        Ok((amount, public_key, balance)) => {
+            println!(
+                "Transaction completed. {} RBK withdrawn from the account {:?}",
+                amount,
+                public_key.as_bytes()
+            );
+            println!("New balance : {} RBK", balance)
+        }
+        Err(e) => println!("error in transaction : {e:?}"),
+    }
+}
+
 //Adding the trait Display to Account
 impl std::fmt::Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -102,34 +132,6 @@ mod tests {
             account2.public_key.as_bytes()
         );
         assert_eq!(account2.balance, 0);
-    }
-
-    fn make_deposit(account: &mut Account, amount: u64) {
-        match account.deposit(amount) {
-            Ok((amount, public_key, balance)) => {
-                println!(
-                    "Transaction completed. {} RBK deposited into the account {:?}",
-                    amount,
-                    public_key.as_bytes()
-                );
-                println!("New balance : {} RBK", balance)
-            }
-            Err(e) => println!("error in transaction : {e:?}"),
-        }
-    }
-
-    fn make_withdraw(account: &mut Account, amount: u64) {
-        match account.withdraw(amount) {
-            Ok((amount, public_key, balance)) => {
-                println!(
-                    "Transaction completed. {} RBK withdrawn from the account {:?}",
-                    amount,
-                    public_key.as_bytes()
-                );
-                println!("New balance : {} RBK", balance)
-            }
-            Err(e) => println!("error in transaction : {e:?}"),
-        }
     }
 
     #[test]
