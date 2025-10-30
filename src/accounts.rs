@@ -1,5 +1,7 @@
+use std::path::Path;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
+use crate::keys::{encode_hex, ensure_keys_dir_exists, save_key, load_key};
 
 #[derive(Debug, Clone)]
 pub struct Account {
@@ -9,7 +11,7 @@ pub struct Account {
 
 impl Account {
     /// Create a new account with a generated keypair and zero balance
-    pub fn new() -> Self {
+    pub fn new(password: &str) -> Self {
         // Generate a new keypair
         let mut csprng = OsRng;
         let keypair: SigningKey = SigningKey::generate(&mut csprng);
@@ -18,8 +20,18 @@ impl Account {
         let private_key = keypair.to_bytes();
         let public_key: VerifyingKey = keypair.verifying_key();
 
-        // Save private key to a file (for demonstration purposes, in a real application handle securely)
-        println!("Private Key: {:?}", private_key);
+        // Convert the public key into a hex to name the JSON file where the encrypted private key is sotred
+        let pubkey_hex = encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
+
+        // Verify that the path where the JSON file will be saved exists
+        let dir = ensure_keys_dir_exists().unwrap();
+        let path = dir.join(format!("{pubkey_hex}.json"));
+        
+        //
+        match save_key(password, &path, &private_key){
+            Ok(msg) => println!("{}",msg),
+            Err(msg) => panic!("Couldn't save file : {}",msg)
+        }
 
         Self {
             public_key,
@@ -36,6 +48,14 @@ impl Account {
             public_key,
             balance: 0,
         }
+    }
+
+    pub fn import_from_json(path : &Path, password: &str) -> Self{
+        let private_key = match load_key(password, &path){
+            Ok(pk) => pk,
+            Err(e) => panic!("{e}")
+        };
+        Account::from_private_key(&private_key)
     }
 
     /// Display account information
@@ -114,12 +134,22 @@ impl std::fmt::Display for Account {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    fn delete_private_key_file(public_key: VerifyingKey){
+        let pubkey_hex = encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
+        let dir = ensure_keys_dir_exists().unwrap();
+        let path = dir.join(format!("{pubkey_hex}.json"));
+        let _ = fs::remove_file(path);
+    }
 
     #[test]
     fn test_account_creation() {
-        let account = Account::new();
+        let account = Account::new("123");
         assert_eq!(account.balance, 0);
         assert_eq!(account.public_key.as_bytes().len(), 32); // Ed25519 public keys are 32 bytes
+
+        delete_private_key_file(account.public_key);
     }
 
     #[test]
@@ -132,11 +162,33 @@ mod tests {
             account2.public_key.as_bytes()
         );
         assert_eq!(account2.balance, 0);
+
+        delete_private_key_file(account1.public_key);
+        delete_private_key_file(account2.public_key);
+    }
+
+    #[test]
+    fn test_import_account_from_json(){
+        let account1 = Account::new("123");
+
+        let pubkey_hex = encode_hex(&account1.public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
+        let dir = ensure_keys_dir_exists().unwrap();
+        let path = dir.join(format!("{pubkey_hex}.json"));
+
+        let account2 = Account::import_from_json(&path, "123");
+
+        assert_eq!(
+            account1.public_key.as_bytes(),
+            account2.public_key.as_bytes()
+        );
+        assert_eq!(account2.balance, 0);
+
+        delete_private_key_file(account1.public_key);
     }
 
     #[test]
     fn test_deposit() {
-        let mut account = Account::new();
+        let mut account = Account::new("123");
 
         make_deposit(&mut account, 0);
         assert_eq!(account.balance, 0);
@@ -146,11 +198,13 @@ mod tests {
 
         make_deposit(&mut account, 50);
         assert_eq!(account.balance, 80);
+
+        delete_private_key_file(account.public_key);
     }
 
     #[test]
     fn test_withdraw() {
-        let mut account = Account::new();
+        let mut account = Account::new("123");
 
         make_deposit(&mut account, 100);
         make_withdraw(&mut account, 0);
@@ -161,12 +215,14 @@ mod tests {
 
         make_withdraw(&mut account, 120);
         assert_eq!(account.balance, 50);
+
+        delete_private_key_file(account.public_key);
     }
 
     #[test]
     fn test_multiaccount_transactions() {
-        let mut alice = Account::new();
-        let mut bob = Account::new();
+        let mut alice = Account::new("123");
+        let mut bob = Account::new("123");
 
         make_deposit(&mut alice, 20);
         make_deposit(&mut bob, 30);
@@ -186,5 +242,8 @@ mod tests {
         make_withdraw(&mut bob, transfer);
         assert_eq!(alice.balance, 32);
         assert_eq!(bob.balance, 23);
+
+        delete_private_key_file(alice.public_key);
+        delete_private_key_file(bob.public_key);
     }
 }
