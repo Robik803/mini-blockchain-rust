@@ -80,6 +80,7 @@ impl Keystore{
         }
     }
 
+    // Extract decryption data from KeyStore
     fn load_decryption_data(&self) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ParseIntError>{
 
         let cyphertext = match decode_hex(&self.cyphertext_hex){
@@ -131,10 +132,12 @@ fn load_json(path: &Path) -> std::io::Result<Keystore> {
     Ok(serde_json::from_str(&data).unwrap())
 }
 
-pub fn get_keys_dir() -> Option<PathBuf> {
+// Get key storage directory
+fn get_keys_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|base| base.join("MiniBlockchain").join("keys"))
 }
 
+// Ensure key storage directory exists
 pub fn ensure_keys_dir_exists() -> std::io::Result<std::path::PathBuf> {
     let path = get_keys_dir().expect("Couldn't check data directory of user.");
     fs::create_dir_all(&path)?;
