@@ -50,17 +50,33 @@ Implements `Display` for human-readable output.
 
 ---
 
-### 📜 Transaction & Ledger (Execution Layer)
+### 💱 Transactions
+
+System allowing to verify transactions validity.
+
+**Struct**
+- `Transaction { from, to, amount, nonce, timestamp, signature, hash }`
+
+**Core methods**
+- `Transaction::new(from: &KeyPair, to: &PublicKey, amount)`
+---
+
+### 📜 Ledger (Execution Layer)
 
 Early ledger system laying groundwork for blockchain transaction flow.
 
 **Structs**
-- `Transaction { from, to, amount, nonce, timestamp, signature, hash }`
 - `Ledger`
 
 **Core methods**
-- `Transaction::new(from: &KeyPair, to: &PublicKey, amount)`
 - `Ledger::process_transaction(...)`
+
+---
+
+### 🛠️ Utils
+
+**Core methods**
+- `get_timestamp() -> u64`
 
 ---
 
@@ -77,15 +93,16 @@ All modules have tests verifying:
 
 ---
 
-## 🛠️ Project Structure
+## 🧩 Project Structure
 
 ```text
 src/
 ├─ accounts.rs # Account model & basic local transfers
 ├─ keys.rs # Key storage & encryption
-├─ ledger.rs # Transaction & ledger skeleton
+├─ ledger.rs # Ledger skeleton
+├─ transactions.rs # Transaction structure
 ├─ utils.rs # Utilities (timestamp)
-└─ main.rs
+└─ lib.rs
 ```
 
 ## 🎯 Roadmap

@@ -1,5 +1,6 @@
 [package]
 name = "mini_blockchain"
+path = "src/lib.rs"
 version = "0.1.0"
 edition = "2024"
 

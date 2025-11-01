@@ -6,10 +6,14 @@ use crate::keys::{encode_hex, ensure_keys_dir_exists, save_key, load_key};
 pub type PublicKey = VerifyingKey;
 pub type KeyPair = SigningKey;
 
+pub fn pubkey_to_hex(public_key: &PublicKey) -> String{
+    encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "")
+}
+
 #[derive(Debug, Clone)]
 pub struct Account {
     pub public_key: PublicKey,
-    pub balance: u64,
+    pub rbk: u64,
 }
 
 impl Account {
@@ -24,7 +28,7 @@ impl Account {
         let public_key: PublicKey = keypair.verifying_key();
 
         // Convert the public key into a hex to name the JSON file where the encrypted private key is sotred
-        let pubkey_hex = encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
+        let pubkey_hex = pubkey_to_hex(&public_key);
 
         // Verify that the path where the JSON file will be saved exists
         let dir = ensure_keys_dir_exists().unwrap();
@@ -36,7 +40,7 @@ impl Account {
             Err(msg) => panic!("Couldn't save file : {}",msg)
         }
 
-        (Self{public_key, balance: 0}, path)
+        (Self{public_key, rbk: 0}, path)
     }
 
     /// Create an account from an existing private key
@@ -46,7 +50,7 @@ impl Account {
 
         Self {
             public_key,
-            balance: 0,
+            rbk: 0,
         }
     }
 
@@ -59,19 +63,13 @@ impl Account {
         Account::from_private_key(&private_key)
     }
 
-    /// Display account information
-    pub fn show(&self) {
-        println!("Account Public Key: {:?}", self.public_key.as_bytes());
-        println!("Account Balance: {}", self.balance);
-    }
-
     /// Deposit an amount into the account
     pub fn deposit(&mut self, amount: u64) -> Result<(u64, &PublicKey, &u64), &'static str> {
         if amount == 0 {
             return Err("Cannot deposit a null amount.");
         }
-        self.balance += amount;
-        Ok((amount, &self.public_key, &self.balance))
+        self.rbk += amount;
+        Ok((amount, &self.public_key, &self.rbk))
     }
 
     /// Withdraw an amount from account
@@ -79,10 +77,10 @@ impl Account {
         if amount == 0 {
             return Err("Cannot withdraw a null amount.");
         }
-        match self.balance.checked_sub(amount) {
-            Some(new_balance) => {
-                self.balance = new_balance;
-                Ok((amount, &self.public_key, &self.balance))
+        match self.rbk.checked_sub(amount) {
+            Some(new_rbk) => {
+                self.rbk = new_rbk;
+                Ok((amount, &self.public_key, &self.rbk))
             }
             None => Err("Insufficient funds..."),
         }
@@ -93,13 +91,13 @@ impl Account {
 ///Make a deposit of an amount into an account
 pub fn make_deposit(account: &mut Account, amount: u64) {
     match account.deposit(amount) {
-        Ok((amount, public_key, balance)) => {
+        Ok((amount, public_key, rbk)) => {
             println!(
-                "Transaction completed. {} RBK deposited into the account {:?}",
+                "Transaction completed. {} RBK deposited into the account {}",
                 amount,
-                public_key.as_bytes()
+                pubkey_to_hex(&public_key)
             );
-            println!("New balance : {} RBK", balance)
+            println!("New balance : {} RBK", rbk)
         }
         Err(e) => println!("error in transaction : {e:?}"),
     }
@@ -108,13 +106,13 @@ pub fn make_deposit(account: &mut Account, amount: u64) {
 ///Make a withdraw of an amount from an account
 pub fn make_withdraw(account: &mut Account, amount: u64) {
     match account.withdraw(amount) {
-        Ok((amount, public_key, balance)) => {
+        Ok((amount, public_key, rbk)) => {
             println!(
-                "Transaction completed. {} RBK withdrawn from the account {:?}",
+                "Transaction completed. {} RBK withdrawn from the account {}",
                 amount,
-                public_key.as_bytes()
+                pubkey_to_hex(&public_key)
             );
-            println!("New balance : {} RBK", balance)
+            println!("New balance : {} RBK", rbk)
         }
         Err(e) => println!("error in transaction : {e:?}"),
     }
@@ -125,9 +123,9 @@ impl std::fmt::Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Account {{ public_key: {:?} -> balance: {} }}",
-            self.public_key.as_bytes(),
-            self.balance
+            "Account {{ public_key: {} -> balance: {} RBK}}",
+            pubkey_to_hex(&self.public_key),
+            self.rbk
         )
     }
 }
@@ -141,7 +139,7 @@ mod tests {
     #[test]
     fn test_account_creation() {
         let (account, path) = Account::new("123");
-        assert_eq!(account.balance, 0);
+        assert_eq!(account.rbk, 0);
         assert_eq!(account.public_key.as_bytes().len(), 32); // Ed25519 public keys are 32 bytes
 
         #[allow(unused)]
@@ -157,7 +155,7 @@ mod tests {
             account1.public_key.as_bytes(),
             account2.public_key.as_bytes()
         );
-        assert_eq!(account2.balance, 0);
+        assert_eq!(account2.rbk, 0);
     }
 
     #[test]
@@ -174,7 +172,7 @@ mod tests {
             account1.public_key.as_bytes(),
             account2.public_key.as_bytes()
         );
-        assert_eq!(account2.balance, 0);
+        assert_eq!(account2.rbk, 0);
 
         #[allow(unused)]
         fs::remove_file(path1);
@@ -185,13 +183,13 @@ mod tests {
         let (mut account, path) = Account::new("123");
 
         make_deposit(&mut account, 0);
-        assert_eq!(account.balance, 0);
+        assert_eq!(account.rbk, 0);
 
         make_deposit(&mut account, 30);
-        assert_eq!(account.balance, 30);
+        assert_eq!(account.rbk, 30);
 
         make_deposit(&mut account, 50);
-        assert_eq!(account.balance, 80);
+        assert_eq!(account.rbk, 80);
 
         #[allow(unused)]
         fs::remove_file(path);
@@ -203,13 +201,13 @@ mod tests {
 
         make_deposit(&mut account, 100);
         make_withdraw(&mut account, 0);
-        assert_eq!(account.balance, 100);
+        assert_eq!(account.rbk, 100);
 
         make_withdraw(&mut account, 50);
-        assert_eq!(account.balance, 50);
+        assert_eq!(account.rbk, 50);
 
         make_withdraw(&mut account, 120);
-        assert_eq!(account.balance, 50);
+        assert_eq!(account.rbk, 50);
 
         #[allow(unused)]
         fs::remove_file(path);
@@ -222,22 +220,22 @@ mod tests {
 
         make_deposit(&mut alice, 20);
         make_deposit(&mut bob, 30);
-        assert_eq!(alice.balance, 20);
-        assert_eq!(bob.balance, 30);
+        assert_eq!(alice.rbk, 20);
+        assert_eq!(bob.rbk, 30);
 
         make_deposit(&mut alice, 0);
         make_withdraw(&mut alice, 0);
-        assert_eq!(alice.balance, 20);
+        assert_eq!(alice.rbk, 20);
 
         make_deposit(&mut alice, 50);
         make_withdraw(&mut alice, 45);
-        assert_eq!(alice.balance, 25);
+        assert_eq!(alice.rbk, 25);
 
         let transfer: u64 = 7;
         make_deposit(&mut alice, transfer);
         make_withdraw(&mut bob, transfer);
-        assert_eq!(alice.balance, 32);
-        assert_eq!(bob.balance, 23);
+        assert_eq!(alice.rbk, 32);
+        assert_eq!(bob.rbk, 23);
 
         #[allow(unused)]
         {fs::remove_file(alice_path);
