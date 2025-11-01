@@ -1,15 +1,9 @@
 use std::path::{Path, PathBuf};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
-use crate::keys::{encode_hex, ensure_keys_dir_exists, save_key, load_key};
+use crate::keys::{PublicKey, KeyPair, pubkey_to_hex, ensure_keys_dir_exists, save_key, load_key};
 
-pub type PublicKey = VerifyingKey;
-pub type KeyPair = SigningKey;
-
-pub fn pubkey_to_hex(public_key: &PublicKey) -> String{
-    encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "")
-}
-
+/// Account containing a public key and a balance in rbk
 #[derive(Debug, Clone)]
 pub struct Account {
     pub public_key: PublicKey,
@@ -17,7 +11,7 @@ pub struct Account {
 }
 
 impl Account {
-    /// Create a new account with a generated keypair and zero balance
+    /// Create a new account with a generated keypair and zero balance. Returns as second argument the path where the encyrpted private key is stored.
     pub fn new(password: &str) -> (Self, PathBuf) {
         // Generate a new keypair
         let mut csprng = OsRng;
@@ -88,7 +82,7 @@ impl Account {
 
 }
 
-///Make a deposit of an amount into an account
+/// Make a deposit of an amount into an account
 pub fn make_deposit(account: &mut Account, amount: u64) {
     match account.deposit(amount) {
         Ok((amount, public_key, rbk)) => {
@@ -103,7 +97,7 @@ pub fn make_deposit(account: &mut Account, amount: u64) {
     }
 }
 
-///Make a withdraw of an amount from an account
+/// Make a withdraw of an amount from an account
 pub fn make_withdraw(account: &mut Account, amount: u64) {
     match account.withdraw(amount) {
         Ok((amount, public_key, rbk)) => {
@@ -118,7 +112,7 @@ pub fn make_withdraw(account: &mut Account, amount: u64) {
     }
 }
 
-//Adding the trait Display to Account
+// Adding the trait Display to Account
 impl std::fmt::Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -135,6 +129,8 @@ impl std::fmt::Display for Account {
 mod tests {
     use super::*;
     use std::fs;
+
+    use crate::utils::encode_hex;
 
     #[test]
     fn test_account_creation() {

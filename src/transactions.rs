@@ -3,7 +3,7 @@ use sha2::Sha512;
 use rand::{RngCore, rngs::OsRng};
 use ed25519_dalek::{Signature, Digest};
 
-use crate::accounts::{PublicKey, KeyPair, pubkey_to_hex};
+use crate::keys::{PublicKey, KeyPair, pubkey_to_hex};
 use crate::utils::get_timestamp;
 
 pub const CONTEXT : &[u8] = b"Robik803MiniBlochainTxnSigning";
@@ -14,6 +14,7 @@ fn random_nonce() -> u64{
     u64::from_be_bytes(b)
 }
 
+/// Transaction between two accounts
 #[derive(Debug, Clone)]
 pub struct Transaction{
     pub from : PublicKey,
@@ -43,6 +44,7 @@ impl Transaction{
         hash
     }
 
+    /// Creates a new transcation between two accounts, generating a signature to be verified by a ledger
     pub fn new(from: &KeyPair, to: &PublicKey, amount: u64) -> Result<Self, &'static str>{
 
         if amount == 0{
@@ -112,10 +114,9 @@ impl std::fmt::Display for Transaction {
 mod tests{
     use std::fs;
 
-    use crate::keys::load_key;
-    use crate::transactions::CONTEXT;
-    use crate::accounts::{Account, KeyPair, make_deposit};
-    use crate::transactions::Transaction;
+    use crate::keys::{KeyPair, load_key};
+    use crate::transactions::{Transaction, CONTEXT};
+    use crate::accounts::{Account, make_deposit};
 
 
     #[test]

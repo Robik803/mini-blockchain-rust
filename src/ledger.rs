@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crate::accounts::{Account, PublicKey};
+use crate::accounts::Account;
+use crate::keys::PublicKey;
 use crate::transactions::{Transaction, CONTEXT};
 
+/// Ledger containing the list of active accounts and the history of transactions
 #[derive(Debug, Clone)]
 pub struct Ledger{
     accounts: HashMap<PublicKey, Account>,
@@ -11,6 +13,7 @@ pub struct Ledger{
 
 impl Ledger  {
 
+    /// Verifies if the transaction is valid and updates ledger
     pub fn process_transaction(&mut self, transaction : &Transaction) -> Result<&'static str, &'static str>{
 
         let amount = transaction.amount;
@@ -45,8 +48,9 @@ mod tests{
     use std::collections::HashMap;
     use std::fs;
 
-    use crate::keys::load_key;
-    use crate::{accounts::{Account, KeyPair, make_deposit}, ledger::{Ledger, Transaction}};
+    use crate::keys::{KeyPair, load_key};
+    use crate::accounts::{Account, make_deposit};
+    use crate::ledger::{Ledger, Transaction};
 
     #[test]
     fn test_transfer(){

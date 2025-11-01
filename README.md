@@ -19,10 +19,14 @@ Secure keystore system with:
 - Load/save functions with error propagation
 - Platform-safe storage directory resolution
 
+**Aliases**
+- `PublicKey` : Implemented as an alias of `ed25519_dalek::VerifyingKey`
+- `Keypair` : Implemented as an alias of `ed25519_dalek::SigningKey`
+
 **Public API**
 - `save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<&'static str, &'static str>`
 - `load_key(password: &str, path: &Path) -> Result<[u8;32], &'static str>`
-- `encode_hex` / `decode_hex`
+- `pubkey_to_hex(public_key: &PublicKey) -> String`
 - `ensure_keys_dir_exists`
 
 ---
@@ -77,6 +81,7 @@ Early ledger system laying groundwork for blockchain transaction flow.
 
 **Core methods**
 - `get_timestamp() -> u64`
+- `encode_hex` / `decode_hex`
 
 ---
 
@@ -101,7 +106,7 @@ src/
 ├─ keys.rs # Key storage & encryption
 ├─ ledger.rs # Ledger skeleton
 ├─ transactions.rs # Transaction structure
-├─ utils.rs # Utilities (timestamp)
+├─ utils.rs # Utilities
 └─ lib.rs
 ```
 

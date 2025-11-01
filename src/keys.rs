@@ -4,13 +4,23 @@ use argon2::{
 };
 #[allow(deprecated)]
 use chacha20poly1305::{aead::{Aead, KeyInit, generic_array::GenericArray}, ChaCha20Poly1305};
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::{Path,PathBuf}};
-use std::{fmt::Write, num::ParseIntError};
+use std::num::ParseIntError;
 
-use crate::utils::get_timestamp;
-use crate::accounts::KeyPair;
+use crate::utils::{get_timestamp, decode_hex, encode_hex};
+
+/// Implemented as an alias of ed25519_dalek::VerifyingKey
+pub type PublicKey = VerifyingKey;
+/// Implemented as an alias of ed25519_dalek::SigningKey
+pub type KeyPair = SigningKey;
+
+/// Turns a public key into a hex String
+pub fn pubkey_to_hex(public_key: &PublicKey) -> String{
+    encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "")
+}
 
 // Getting an encryption key from a password
 fn derive_key_from_password(password: &str, salt: &[u8]) -> [u8; 32] {
@@ -39,7 +49,7 @@ fn decrypt_chacha(key: &[u8; 32], nonce: &[u8; 12], cyphertext: &[u8]) -> Vec<u8
           .expect("decryption failure!")
 }
 
-/// Struct conatining the data to decrypt the private key.
+// Struct conatining the data to decrypt the private key.
 #[derive(Serialize, Deserialize, Debug)]
 struct Keystore{
     version: u32,
@@ -103,24 +113,6 @@ impl Keystore{
     }
 }
 
-
-// Decode a vector of bytes from a string
-pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
-    (0..s.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
-        .collect()
-}
-
-// Encode a vector of bytes into a string
-pub fn encode_hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        write!(&mut s, "{:02x}", b).unwrap();
-    }
-    s
-}
-
 // Save a Keystore into a JSON file
 fn save_json(path: &Path, ks: &Keystore) -> std::io::Result<()> {
     let json = serde_json::to_string_pretty(ks).unwrap();
@@ -138,7 +130,7 @@ fn get_keys_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|base| base.join("MiniBlockchain").join("keys"))
 }
 
-// Ensure key storage directory exists
+/// Ensure key storage directory exists
 pub fn ensure_keys_dir_exists() -> std::io::Result<std::path::PathBuf> {
     let path = get_keys_dir().expect("Couldn't check data directory of user.");
     fs::create_dir_all(&path)?;
@@ -222,7 +214,6 @@ pub fn load_key(password: &str, path: &Path) -> Result<[u8;32], &'static str>{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::accounts::PublicKey;
 
     #[test]
     fn test_keystore_serialization_roundtrip() {
