@@ -7,9 +7,10 @@ use chacha20poly1305::{aead::{Aead, KeyInit, generic_array::GenericArray}, ChaCh
 use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::{Path,PathBuf}};
-use std::time::{UNIX_EPOCH};
 use std::{fmt::Write, num::ParseIntError};
-use ed25519_dalek::SigningKey;
+
+use crate::utils::get_timestamp;
+use crate::accounts::KeyPair;
 
 // Getting an encryption key from a password
 fn derive_key_from_password(password: &str, salt: &[u8]) -> [u8; 32] {
@@ -47,7 +48,7 @@ struct Keystore{
     cyphertext_hex: String,
     nonce_hex: String,
     kdf: KdfInfo,
-    created_at: String,
+    created_at: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -64,7 +65,7 @@ impl Keystore{
 
     // Create a new Keystore
     fn default(pubkey: &[u8], cyphertext: &[u8], nonce: &[u8; 12], salt: &[u8]) -> Self{
-        let time = format!("{:?}", std::time::SystemTime::now().duration_since(UNIX_EPOCH).expect("time should go forward"));
+        let time = get_timestamp();
         Keystore{
             version : 1,
             algorithm: "chacha20poly1305".to_string(),
@@ -164,7 +165,7 @@ pub fn save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<&'
     let (cyphertext, nonce) = encrypt_chacha(&encryption_key, private_key);
 
     // Get the public key from the private key
-    let public_key = SigningKey::from_bytes(private_key).verifying_key().to_bytes();
+    let public_key = KeyPair::from_bytes(private_key).verifying_key().to_bytes();
 
     // Creating the Keystore to serialize
     let to_store = Keystore::default(&public_key, &cyphertext, &nonce, salt);
@@ -221,21 +222,21 @@ pub fn load_key(password: &str, path: &Path) -> Result<[u8;32], &'static str>{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use::ed25519_dalek::VerifyingKey;
+    use crate::accounts::PublicKey;
 
     #[test]
     fn test_keystore_serialization_roundtrip() {
 
         let password = "1234prueba";
 
-        let keypair: SigningKey = SigningKey::generate(&mut OsRng);
+        let keypair: KeyPair = KeyPair::generate(&mut OsRng);
         let private_key = keypair.to_bytes();
 
         let salt_string = SaltString::generate(&mut OsRng);
         let salt = salt_string.as_str().as_bytes();
         let encryption_key = derive_key_from_password(password, salt);
         let (cyphertext, nonce) = encrypt_chacha(&encryption_key, &private_key);
-        let public_key = SigningKey::from_bytes(&private_key).verifying_key().to_bytes();
+        let public_key = KeyPair::from_bytes(&private_key).verifying_key().to_bytes();
 
         let ks1 = Keystore::default(&public_key, &cyphertext, &nonce, salt);
 
@@ -252,10 +253,10 @@ mod tests {
 
         let password = "1234prueba";
 
-        let keypair: SigningKey = SigningKey::generate(&mut OsRng);
+        let keypair: KeyPair = KeyPair::generate(&mut OsRng);
         let private_key = keypair.to_bytes();
 
-        let public_key: VerifyingKey = keypair.verifying_key();
+        let public_key: PublicKey = keypair.verifying_key();
         let pubkey_hex = encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
 
         let dir = ensure_keys_dir_exists().unwrap();

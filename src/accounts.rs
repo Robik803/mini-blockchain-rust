@@ -1,24 +1,27 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use crate::keys::{encode_hex, ensure_keys_dir_exists, save_key, load_key};
 
+pub type PublicKey = VerifyingKey;
+pub type KeyPair = SigningKey;
+
 #[derive(Debug, Clone)]
 pub struct Account {
-    pub public_key: VerifyingKey,
+    pub public_key: PublicKey,
     pub balance: u64,
 }
 
 impl Account {
     /// Create a new account with a generated keypair and zero balance
-    pub fn new(password: &str) -> Self {
+    pub fn new(password: &str) -> (Self, PathBuf) {
         // Generate a new keypair
         let mut csprng = OsRng;
-        let keypair: SigningKey = SigningKey::generate(&mut csprng);
+        let keypair: KeyPair = KeyPair::generate(&mut csprng);
 
         // Extract the public and private keys
         let private_key = keypair.to_bytes();
-        let public_key: VerifyingKey = keypair.verifying_key();
+        let public_key: PublicKey = keypair.verifying_key();
 
         // Convert the public key into a hex to name the JSON file where the encrypted private key is sotred
         let pubkey_hex = encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
@@ -33,15 +36,12 @@ impl Account {
             Err(msg) => panic!("Couldn't save file : {}",msg)
         }
 
-        Self {
-            public_key,
-            balance: 0,
-        }
+        (Self{public_key, balance: 0}, path)
     }
 
     /// Create an account from an existing private key
     pub fn from_private_key(private_key_bytes: &[u8; 32]) -> Self {
-        let signing_key = SigningKey::from_bytes(private_key_bytes);
+        let signing_key: KeyPair = KeyPair::from_bytes(private_key_bytes);
         let public_key = signing_key.verifying_key();
 
         Self {
@@ -50,6 +50,7 @@ impl Account {
         }
     }
 
+    /// Creates a new account from an encrypted private key stored in a JSON
     pub fn import_from_json(path : &Path, password: &str) -> Self{
         let private_key = match load_key(password, &path){
             Ok(pk) => pk,
@@ -65,7 +66,7 @@ impl Account {
     }
 
     /// Deposit an amount into the account
-    pub fn deposit(&mut self, amount: u64) -> Result<(u64, &VerifyingKey, &u64), &'static str> {
+    pub fn deposit(&mut self, amount: u64) -> Result<(u64, &PublicKey, &u64), &'static str> {
         if amount == 0 {
             return Err("Cannot deposit a null amount.");
         }
@@ -74,7 +75,7 @@ impl Account {
     }
 
     /// Withdraw an amount from account
-    pub fn withdraw(&mut self, amount: u64) -> Result<(u64, &VerifyingKey, &u64), &'static str> {
+    pub fn withdraw(&mut self, amount: u64) -> Result<(u64, &PublicKey, &u64), &'static str> {
         if amount == 0 {
             return Err("Cannot withdraw a null amount.");
         }
@@ -86,6 +87,7 @@ impl Account {
             None => Err("Insufficient funds..."),
         }
     }
+
 }
 
 ///Make a deposit of an amount into an account
@@ -136,20 +138,14 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn delete_private_key_file(public_key: VerifyingKey){
-        let pubkey_hex = encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
-        let dir = ensure_keys_dir_exists().unwrap();
-        let path = dir.join(format!("{pubkey_hex}.json"));
-        let _ = fs::remove_file(path);
-    }
-
     #[test]
     fn test_account_creation() {
-        let account = Account::new("123");
+        let (account, path) = Account::new("123");
         assert_eq!(account.balance, 0);
         assert_eq!(account.public_key.as_bytes().len(), 32); // Ed25519 public keys are 32 bytes
 
-        delete_private_key_file(account.public_key);
+        #[allow(unused)]
+        fs::remove_file(path);
     }
 
     #[test]
@@ -162,14 +158,11 @@ mod tests {
             account2.public_key.as_bytes()
         );
         assert_eq!(account2.balance, 0);
-
-        delete_private_key_file(account1.public_key);
-        delete_private_key_file(account2.public_key);
     }
 
     #[test]
     fn test_import_account_from_json(){
-        let account1 = Account::new("123");
+        let (account1, path1) = Account::new("123");
 
         let pubkey_hex = encode_hex(&account1.public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
         let dir = ensure_keys_dir_exists().unwrap();
@@ -183,12 +176,13 @@ mod tests {
         );
         assert_eq!(account2.balance, 0);
 
-        delete_private_key_file(account1.public_key);
+        #[allow(unused)]
+        fs::remove_file(path1);
     }
 
     #[test]
     fn test_deposit() {
-        let mut account = Account::new("123");
+        let (mut account, path) = Account::new("123");
 
         make_deposit(&mut account, 0);
         assert_eq!(account.balance, 0);
@@ -199,12 +193,13 @@ mod tests {
         make_deposit(&mut account, 50);
         assert_eq!(account.balance, 80);
 
-        delete_private_key_file(account.public_key);
+        #[allow(unused)]
+        fs::remove_file(path);
     }
 
     #[test]
     fn test_withdraw() {
-        let mut account = Account::new("123");
+        let (mut account, path) = Account::new("123");
 
         make_deposit(&mut account, 100);
         make_withdraw(&mut account, 0);
@@ -216,13 +211,14 @@ mod tests {
         make_withdraw(&mut account, 120);
         assert_eq!(account.balance, 50);
 
-        delete_private_key_file(account.public_key);
+        #[allow(unused)]
+        fs::remove_file(path);
     }
 
     #[test]
     fn test_multiaccount_transactions() {
-        let mut alice = Account::new("123");
-        let mut bob = Account::new("123");
+        let (mut alice, alice_path) = Account::new("123");
+        let (mut bob, bob_path) = Account::new("123");
 
         make_deposit(&mut alice, 20);
         make_deposit(&mut bob, 30);
@@ -243,7 +239,9 @@ mod tests {
         assert_eq!(alice.balance, 32);
         assert_eq!(bob.balance, 23);
 
-        delete_private_key_file(alice.public_key);
-        delete_private_key_file(bob.public_key);
+        #[allow(unused)]
+        {fs::remove_file(alice_path);
+        fs::remove_file(bob_path);}
     }
+
 }
