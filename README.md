@@ -58,11 +58,23 @@ Implements `Display` for human-readable output.
 
 System allowing to verify transactions validity.
 
-**Struct**
-- `Transaction { from, to, amount, nonce, timestamp, signature, hash }`
+**Traits**
+- `Message`
+
+**Structs**
+- `UnsignedTransaction{from, to, amount, nonce, timestamp} impl Messasge`
+- `SignedTransaction{from, to, amount, nonce, timestamp, signature} impl Message`
 
 **Core methods**
-- `Transaction::new(from: &KeyPair, to: &PublicKey, amount)`
+- `Message::`
+    - `sender(&self)-> &PublicKey`
+    - `receiver(&self) -> &PublicKey`
+    - `amount(&self) -> u64`
+    - `nonce(&self) -> u64`
+    - `timestamp(&self) -> u64`
+    - `to_bytes(&self) -> Vec<u8>`
+    - `prehashed(&self) -> Sha512`
+- `UnsignedTransaction::new(from: &PublicKey, to: &PublicKey, amount: u64, nonce: u64)`
 ---
 
 ### 📜 Ledger (Execution Layer)
