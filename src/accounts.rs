@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use crate::keys::{PublicKey, KeyPair, pubkey_to_hex, ensure_keys_dir_exists, save_key, load_key};
 
@@ -8,6 +7,7 @@ use crate::keys::{PublicKey, KeyPair, pubkey_to_hex, ensure_keys_dir_exists, sav
 pub struct Account {
     pub public_key: PublicKey,
     pub rbk: u64,
+    pub nonce: u64,
 }
 
 impl Account {
@@ -34,7 +34,7 @@ impl Account {
             Err(msg) => panic!("Couldn't save file : {}",msg)
         }
 
-        (Self{public_key, rbk: 0}, path)
+        (Self{public_key, rbk: 0, nonce: 0}, path)
     }
 
     /// Create an account from an existing private key
@@ -45,6 +45,7 @@ impl Account {
         Self {
             public_key,
             rbk: 0,
+            nonce : 0
         }
     }
 

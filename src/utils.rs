@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fmt::Write, num::ParseIntError};
+use rand::{RngCore, rngs::OsRng};
 
 /// Time in seconds since UNIX_EPOCH : GMT: Thursday, 1 January 1970 0:00:00
 pub fn get_timestamp() -> u64 {

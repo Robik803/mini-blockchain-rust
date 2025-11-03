@@ -50,7 +50,7 @@ fn decrypt_chacha(key: &[u8; 32], nonce: &[u8; 12], cyphertext: &[u8]) -> Vec<u8
 }
 
 // Struct conatining the data to decrypt the private key.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 struct Keystore{
     version: u32,
     algorithm: String,
@@ -61,14 +61,14 @@ struct Keystore{
     created_at: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 struct KdfInfo {
     name: String,
     salt_hex: String,
     params: KdfParams,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 struct KdfParams { m: u32, t: u32, p: u32 }
 
 impl Keystore{
