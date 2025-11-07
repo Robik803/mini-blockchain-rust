@@ -26,8 +26,9 @@ Secure keystore system with:
 **Public API**
 - `save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<&'static str, &'static str>`
 - `load_key(password: &str, path: &Path) -> Result<[u8;32], &'static str>`
+- `generate_and_save(password: &str) -> Result<(PublicKey, PathBuf), KeyError>`
 - `pubkey_to_hex(public_key: &PublicKey) -> String`
-- `ensure_keys_dir_exists`
+- `ensure_keys_dir_exists()`
 
 ---
 
