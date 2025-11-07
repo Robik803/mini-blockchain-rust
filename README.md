@@ -74,6 +74,15 @@ System allowing to verify transactions validity.
 - `UnsignedTransaction::new(from: &PublicKey, to: &PublicKey, amount: u64, nonce: u64)`
 ---
 
+### 📝 Instructions
+
+Defines the interface through which actions are executed on the ledger.
+
+**Enums**
+- `Instruction{Transfer(SignedTransaction)}`
+
+---
+
 ### 📜 Ledger (Execution Layer)
 
 Early ledger system laying groundwork for blockchain transaction flow.
@@ -82,7 +91,7 @@ Early ledger system laying groundwork for blockchain transaction flow.
 - `Ledger`
 
 **Core methods**
-- `Ledger::process_transaction(...)`
+- `Ledger::execute_instruction(instruction: Instruction)` — public entry point for all ledger actions (currently delegates to internal process_transaction).
 
 ---
 

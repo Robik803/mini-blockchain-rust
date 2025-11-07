@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::accounts::Account;
 use crate::errors::BlockchainError;
 use crate::keys::PublicKey;
-use crate::transactions::{CONTEXT, Message, SignedTransaction};
+use crate::transactions::{self, CONTEXT, Message, SignedTransaction};
+use crate::instructions::Instruction;
 
 /// Ledger containing the list of active accounts and the history of transactions
 pub struct Ledger {
@@ -24,8 +25,8 @@ impl Ledger {
         self.accounts[sender_pubkey].nonce + 1 == nonce
     }
 
-    /// Verifies if the transaction is valid and updates ledger
-    pub fn process_transaction(
+    // Verifies if the transaction is valid and updates ledger
+    fn process_transaction(
         &mut self,
         transaction: SignedTransaction,
     ) -> Result<(), BlockchainError> {
@@ -70,6 +71,13 @@ impl Ledger {
         self.history.push(transaction);
 
         Ok(())
+    }
+
+    /// Executes instruction
+    pub fn execute_instruction(&mut self, instruction: Instruction) -> Result<(), BlockchainError> {
+        match instruction {
+            Instruction::Transfer(transaction) => self.process_transaction(transaction),
+        }
     }
 }
 
