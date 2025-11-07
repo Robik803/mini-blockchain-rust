@@ -4,6 +4,7 @@ use ed25519_dalek::{Signature, Digest};
 
 use crate::keys::{PublicKey, pubkey_to_hex};
 use crate::utils::get_timestamp;
+use crate::errors::BlockchainError;
 
 pub const CONTEXT : &[u8] = b"Robik803MiniBlochainTxnSigning";
 
@@ -43,11 +44,11 @@ pub struct UnsignedTransaction{
 
 impl UnsignedTransaction{
 
-    pub fn new(from: &PublicKey, to: &PublicKey, amount: u64, nonce: u64)  -> Result<Self, &'static str>{
+    pub fn new(from: &PublicKey, to: &PublicKey, amount: u64, nonce: u64)  -> Result<Self, BlockchainError>{
         if amount == 0{
-            return Err("Cannot transfer a null amount.");
+            return Err(BlockchainError::InvalidNullAmount);
         } else if from == to{
-            return Err("Cannot make transactions within the same account.");
+            return Err(BlockchainError::TransactionIntoSameAccount);
         }
 
         let timestamp = get_timestamp();
@@ -128,7 +129,7 @@ impl std::fmt::Display for SignedTransaction{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Tranaction : {{ from: {} -> to: {}, amount : {} RBK, at timestamp({})}}",
+            "Transaction : {{ from: {} -> to: {}, amount : {} RBK, at timestamp({})}}",
             pubkey_to_hex(&self.from),
             pubkey_to_hex(&self.to),
             self.amount,
@@ -144,15 +145,15 @@ mod tests{
 
     use crate::keys::{KeyPair, load_key};
     use crate::transactions::{UnsignedTransaction, SignedTransaction, Message, CONTEXT};
-    use crate::accounts::{Account, make_deposit};
+    use crate::accounts::Account;
 
 
     #[test]
     fn test_transaction(){
-        let (mut alice, alice_path) = Account::new("123");
-        let (bob, bob_path) = Account::new("123");
+        let (mut alice, alice_path) = Account::new("123").unwrap();
+        let (bob, bob_path) = Account::new("123").unwrap();
 
-        make_deposit(&mut alice, 300);
+        alice.deposit(300);
 
         let alice_private_key = load_key("123", &alice_path).unwrap();
         let alice_keypair = KeyPair::from_bytes(&alice_private_key);

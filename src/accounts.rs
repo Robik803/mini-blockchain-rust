@@ -1,18 +1,19 @@
 use std::path::{Path, PathBuf};
 use rand::rngs::OsRng;
-use crate::keys::{PublicKey, KeyPair, pubkey_to_hex, ensure_keys_dir_exists, save_key, load_key};
+use crate::keys::{KeyPair, PublicKey, ensure_keys_dir_exists, load_key, pubkey_to_hex, save_key};
+use crate::errors::{KeyError, BlockchainError};
 
-/// Account containing a public key and a balance in rbk
+/// Account containing a public key and a balance in torvalds
 #[derive(Debug, Clone)]
 pub struct Account {
     pub public_key: PublicKey,
-    pub rbk: u64,
+    pub torvalds: u64,
     pub nonce: u64,
 }
 
 impl Account {
     /// Create a new account with a generated keypair and zero balance. Returns as second argument the path where the encyrpted private key is stored.
-    pub fn new(password: &str) -> (Self, PathBuf) {
+    pub fn new(password: &str) -> Result<(Self, PathBuf), KeyError> {
         // Generate a new keypair
         let mut csprng = OsRng;
         let keypair: KeyPair = KeyPair::generate(&mut csprng);
@@ -25,16 +26,13 @@ impl Account {
         let pubkey_hex = pubkey_to_hex(&public_key);
 
         // Verify that the path where the JSON file will be saved exists
-        let dir = ensure_keys_dir_exists().unwrap();
+        let dir = ensure_keys_dir_exists()?;
         let path = dir.join(format!("{pubkey_hex}.json"));
         
         //
-        match save_key(password, &path, &private_key){
-            Ok(msg) => println!("{}",msg),
-            Err(msg) => panic!("Couldn't save file : {}",msg)
-        }
+        save_key(password, &path, &private_key)?;
 
-        (Self{public_key, rbk: 0, nonce: 0}, path)
+        Ok((Self{public_key, torvalds: 0, nonce: 0}, path))
     }
 
     /// Create an account from an existing private key
@@ -44,73 +42,40 @@ impl Account {
 
         Self {
             public_key,
-            rbk: 0,
+            torvalds: 0,
             nonce : 0
         }
     }
 
     /// Creates a new account from an encrypted private key stored in a JSON
-    pub fn import_from_json(path : &Path, password: &str) -> Self{
-        let private_key = match load_key(password, &path){
-            Ok(pk) => pk,
-            Err(e) => panic!("{e}")
-        };
-        Account::from_private_key(&private_key)
+    pub fn import_from_json(path : &Path, password: &str) -> Result<Self, KeyError>{
+        let private_key = load_key(password, &path)?;
+        Ok(Account::from_private_key(&private_key))
     }
 
     /// Deposit an amount into the account
-    pub fn deposit(&mut self, amount: u64) -> Result<(u64, &PublicKey, &u64), &'static str> {
+    pub fn deposit(&mut self, amount: u64) -> Result<(), BlockchainError> {
         if amount == 0 {
-            return Err("Cannot deposit a null amount.");
+            return Err(BlockchainError::InvalidNullAmount);
         }
-        self.rbk += amount;
-        Ok((amount, &self.public_key, &self.rbk))
+        self.torvalds += amount;
+        Ok(())
     }
 
     /// Withdraw an amount from account
-    pub fn withdraw(&mut self, amount: u64) -> Result<(u64, &PublicKey, &u64), &'static str> {
+    pub fn withdraw(&mut self, amount: u64) -> Result<(), BlockchainError> {
         if amount == 0 {
-            return Err("Cannot withdraw a null amount.");
+            return Err(BlockchainError::InvalidNullAmount);
         }
-        match self.rbk.checked_sub(amount) {
-            Some(new_rbk) => {
-                self.rbk = new_rbk;
-                Ok((amount, &self.public_key, &self.rbk))
+        match self.torvalds.checked_sub(amount) {
+            Some(new_torvalds) => {
+                self.torvalds = new_torvalds;
+                Ok(())
             }
-            None => Err("Insufficient funds..."),
+            None => Err(BlockchainError::InsufficientFunds),
         }
     }
 
-}
-
-/// Make a deposit of an amount into an account
-pub fn make_deposit(account: &mut Account, amount: u64) {
-    match account.deposit(amount) {
-        Ok((amount, public_key, rbk)) => {
-            println!(
-                "Transaction completed. {} RBK deposited into the account {}",
-                amount,
-                pubkey_to_hex(&public_key)
-            );
-            println!("New balance : {} RBK", rbk)
-        }
-        Err(e) => println!("error in transaction : {e:?}"),
-    }
-}
-
-/// Make a withdraw of an amount from an account
-pub fn make_withdraw(account: &mut Account, amount: u64) {
-    match account.withdraw(amount) {
-        Ok((amount, public_key, rbk)) => {
-            println!(
-                "Transaction completed. {} RBK withdrawn from the account {}",
-                amount,
-                pubkey_to_hex(&public_key)
-            );
-            println!("New balance : {} RBK", rbk)
-        }
-        Err(e) => println!("error in transaction : {e:?}"),
-    }
 }
 
 // Adding the trait Display to Account
@@ -118,9 +83,9 @@ impl std::fmt::Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Account {{ public_key: {} -> balance: {} RBK}}",
+            "Account {{ public_key: {} -> balance: {} torvalds}}",
             pubkey_to_hex(&self.public_key),
-            self.rbk
+            self.torvalds
         )
     }
 }
@@ -135,8 +100,8 @@ mod tests {
 
     #[test]
     fn test_account_creation() {
-        let (account, path) = Account::new("123");
-        assert_eq!(account.rbk, 0);
+        let (account, path) = Account::new("123").unwrap();
+        assert_eq!(account.torvalds, 0);
         assert_eq!(account.public_key.as_bytes().len(), 32); // Ed25519 public keys are 32 bytes
 
         #[allow(unused)]
@@ -152,24 +117,24 @@ mod tests {
             account1.public_key.as_bytes(),
             account2.public_key.as_bytes()
         );
-        assert_eq!(account2.rbk, 0);
+        assert_eq!(account2.torvalds, 0);
     }
 
     #[test]
     fn test_import_account_from_json(){
-        let (account1, path1) = Account::new("123");
+        let (account1, path1) = Account::new("123").unwrap();
 
         let pubkey_hex = encode_hex(&account1.public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
         let dir = ensure_keys_dir_exists().unwrap();
         let path = dir.join(format!("{pubkey_hex}.json"));
 
-        let account2 = Account::import_from_json(&path, "123");
+        let account2 = Account::import_from_json(&path, "123").unwrap();
 
         assert_eq!(
             account1.public_key.as_bytes(),
             account2.public_key.as_bytes()
         );
-        assert_eq!(account2.rbk, 0);
+        assert_eq!(account2.torvalds, 0);
 
         #[allow(unused)]
         fs::remove_file(path1);
@@ -177,16 +142,16 @@ mod tests {
 
     #[test]
     fn test_deposit() {
-        let (mut account, path) = Account::new("123");
+        let (mut account, path) = Account::new("123").unwrap();
 
-        make_deposit(&mut account, 0);
-        assert_eq!(account.rbk, 0);
+        assert!(account.deposit(0).is_err());
+        assert_eq!(account.torvalds, 0);
 
-        make_deposit(&mut account, 30);
-        assert_eq!(account.rbk, 30);
+        account.deposit(30).unwrap();
+        assert_eq!(account.torvalds, 30);
 
-        make_deposit(&mut account, 50);
-        assert_eq!(account.rbk, 80);
+        account.deposit(50).unwrap();
+        assert_eq!(account.torvalds, 80);
 
         #[allow(unused)]
         fs::remove_file(path);
@@ -194,17 +159,17 @@ mod tests {
 
     #[test]
     fn test_withdraw() {
-        let (mut account, path) = Account::new("123");
+        let (mut account, path) = Account::new("123").unwrap();
 
-        make_deposit(&mut account, 100);
-        make_withdraw(&mut account, 0);
-        assert_eq!(account.rbk, 100);
+        account.deposit(100).unwrap();
+        assert!(account.withdraw(0).is_err());
+        assert_eq!(account.torvalds, 100);
 
-        make_withdraw(&mut account, 50);
-        assert_eq!(account.rbk, 50);
+        account.withdraw(50).unwrap();
+        assert_eq!(account.torvalds, 50);
 
-        make_withdraw(&mut account, 120);
-        assert_eq!(account.rbk, 50);
+        assert!(account.withdraw(120).is_err());
+        assert_eq!(account.torvalds, 50);
 
         #[allow(unused)]
         fs::remove_file(path);
@@ -212,27 +177,27 @@ mod tests {
 
     #[test]
     fn test_multiaccount_transactions() {
-        let (mut alice, alice_path) = Account::new("123");
-        let (mut bob, bob_path) = Account::new("123");
+        let (mut alice, alice_path) = Account::new("123").unwrap();
+        let (mut bob, bob_path) = Account::new("123").unwrap();
 
-        make_deposit(&mut alice, 20);
-        make_deposit(&mut bob, 30);
-        assert_eq!(alice.rbk, 20);
-        assert_eq!(bob.rbk, 30);
+        alice.deposit(20).unwrap();
+        bob.deposit(30).unwrap();
+        assert_eq!(alice.torvalds, 20);
+        assert_eq!(bob.torvalds, 30);
 
-        make_deposit(&mut alice, 0);
-        make_withdraw(&mut alice, 0);
-        assert_eq!(alice.rbk, 20);
+        assert!(alice.deposit(0).is_err());
+        assert!(alice.withdraw(0).is_err());
+        assert_eq!(alice.torvalds, 20);
 
-        make_deposit(&mut alice, 50);
-        make_withdraw(&mut alice, 45);
-        assert_eq!(alice.rbk, 25);
+        alice.deposit(50).unwrap();
+        alice.withdraw(45).unwrap();
+        assert_eq!(alice.torvalds, 25);
 
         let transfer: u64 = 7;
-        make_deposit(&mut alice, transfer);
-        make_withdraw(&mut bob, transfer);
-        assert_eq!(alice.rbk, 32);
-        assert_eq!(bob.rbk, 23);
+        alice.deposit(transfer).unwrap();
+        bob.withdraw(transfer).unwrap();
+        assert_eq!(alice.torvalds, 32);
+        assert_eq!(bob.torvalds, 23);
 
         #[allow(unused)]
         {fs::remove_file(alice_path);

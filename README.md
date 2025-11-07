@@ -46,10 +46,6 @@ Imitates blockchain account model.
 - `deposit(...)`
 - `withdraw(...)`
 
-**Helper functions**
-- `make_deposit(&mut Account, amount)`
-- `make_withdraw(&mut Account, amount)`
-
 Implements `Display` for human-readable output.
 
 ---
@@ -119,6 +115,7 @@ src/
 ├─ ledger.rs # Ledger skeleton
 ├─ transactions.rs # Transaction structure
 ├─ utils.rs # Utilities
+├─ errors.rs # Error handling
 └─ lib.rs
 ```
 
@@ -130,9 +127,9 @@ src/
 - Local balance ops
 - Transaction struct + hashing + validation rules
 - Ledger signature verification
+- Add nonce tracking per account
 
 ### Next Steps 🚧
-- Add nonce tracking per account
 - Build CLI for wallet commands
 - Persist ledger state
 
@@ -152,4 +149,4 @@ This is not a cryptocurrency — it’s a **hands-on educational blockchain simu
 
 > **Actively being built.**  
 Core cryptography, accounts and first ledger prototype complete.  
-Now entering **Ledger nonce tracking and hashing** phase.
+Now entering **Instructions implementation** phase.

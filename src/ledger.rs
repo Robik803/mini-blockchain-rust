@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::accounts::Account;
+use crate::errors::BlockchainError;
 use crate::keys::PublicKey;
 use crate::transactions::{SignedTransaction, Message,CONTEXT};
 
@@ -25,32 +26,32 @@ impl Ledger  {
     }
 
     /// Verifies if the transaction is valid and updates ledger
-    pub fn process_transaction(&mut self, transaction : SignedTransaction) -> Result<&'static str, &'static str>{
+    pub fn process_transaction(&mut self, transaction : SignedTransaction) -> Result<(), BlockchainError>{
 
         let amount = transaction.amount;
         let sender_pubkey = transaction.from;
         let receiver_pubkey = transaction.to;
 
-        if !sender_pubkey.verify_prehashed(transaction.prehashed(), Some(CONTEXT), &transaction.signature).is_ok(){
-            return Err("Invalid transaction");
-        } else if amount == 0 {
-            return Err("Cannot tranfer a null amount.");
+        sender_pubkey.verify_prehashed(transaction.prehashed(), Some(CONTEXT), &transaction.signature)?;
+           
+        if amount == 0 {
+            return Err(BlockchainError::InvalidNullAmount);
         } else if !self.accounts.contains_key(&sender_pubkey) {
-            return Err("Sender account doesn't exists.");
+            return Err(BlockchainError::InvalidSenderAccount);
         } else if !self.check_nonce(&sender_pubkey, transaction.nonce){
-            return Err("Invalid nonce.");
+            return Err(BlockchainError::InvalidNonce);
         }
 
-        match self.accounts[&sender_pubkey].rbk.checked_sub(transaction.amount){
-            Some(new_sender_rbk) => self.accounts.entry(sender_pubkey).and_modify(|account| {account.rbk = new_sender_rbk; account.nonce += 1}),
-            None => return Err("Insufficient funds in sender account to make this transaction")
+        match self.accounts[&sender_pubkey].torvalds.checked_sub(transaction.amount){
+            Some(new_sender_torvalds) => self.accounts.entry(sender_pubkey).and_modify(|account| {account.torvalds = new_sender_torvalds; account.nonce += 1}),
+            None => return Err(BlockchainError::InsufficientFunds)
         };
 
-        self.accounts.entry(receiver_pubkey).and_modify(|account| {account.rbk += amount }).or_insert(Account { public_key: receiver_pubkey, rbk: amount, nonce: 0 });
+        self.accounts.entry(receiver_pubkey).and_modify(|account| {account.torvalds += amount }).or_insert(Account { public_key: receiver_pubkey, torvalds: amount, nonce: 0 });
 
         self.history.push(transaction);
         
-        Ok("Transaction completed.")
+        Ok(())
 
     }
 
@@ -63,17 +64,17 @@ mod tests{
     use std::fs;
 
     use crate::keys::{KeyPair, load_key};
-    use crate::accounts::{Account, make_deposit};
+    use crate::accounts::Account;
     use crate::ledger::Ledger;
     use crate::transactions::{UnsignedTransaction, SignedTransaction, Message, CONTEXT};
 
     #[test]
     fn test_transfer(){
-        let (mut alice, alice_path) = Account::new("123");
-        let (bob, bob_path) = Account::new("123");
-        let (charlie, charlie_path) = Account::new("123");
+        let (mut alice, alice_path) = Account::new("123").unwrap();
+        let (bob, bob_path) = Account::new("123").unwrap();
+        let (charlie, charlie_path) = Account::new("123").unwrap();
 
-        make_deposit(&mut alice, 300);
+        alice.deposit(300).unwrap();
 
         let mut ledger = Ledger{accounts: HashMap::new(), history: Vec::new()};
 
@@ -93,15 +94,14 @@ mod tests{
         let signature = alice_keypair.sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT)).unwrap();
         let signed_tx = SignedTransaction{from: unsigned_tx.from, to: unsigned_tx.to, amount: unsigned_tx.amount, nonce: unsigned_tx.nonce, timestamp: unsigned_tx.timestamp, signature};
 
-        let transfer = ledger.process_transaction(signed_tx);
+        ledger.process_transaction(signed_tx).unwrap();
 
-        assert_eq!(transfer, Ok("Transaction completed."));
         assert!(ledger.accounts.contains_key(&alice.public_key));
         assert!(ledger.accounts.contains_key(&bob.public_key));
         assert_eq!(ledger.accounts[&alice.public_key].public_key, alice.public_key);
         assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&alice.public_key].rbk, 250);
-        assert_eq!(ledger.accounts[&bob.public_key].rbk, 50);
+        assert_eq!(ledger.accounts[&alice.public_key].torvalds, 250);
+        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 50);
         assert_eq!(ledger.history.last().unwrap().from, alice.public_key);
         assert_eq!(ledger.history.last().unwrap().to, bob.public_key);
         assert_eq!(ledger.history.last().unwrap().amount, 50);
@@ -111,73 +111,68 @@ mod tests{
         let signature = charlie_keypair.sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT)).unwrap();
         let signed_tx = SignedTransaction{from: unsigned_tx.from, to: unsigned_tx.to, amount: unsigned_tx.amount, nonce: unsigned_tx.nonce, timestamp: unsigned_tx.timestamp, signature};
 
-        let transfer = ledger.process_transaction(signed_tx);
+        assert!(ledger.process_transaction(signed_tx).is_err());
 
-        assert_eq!(transfer, Err("Sender account doesn't exists."));
         assert!(!ledger.accounts.contains_key(&charlie.public_key));
         assert!(ledger.accounts.contains_key(&bob.public_key));
         assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&bob.public_key].rbk, 50);
+        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 50);
 
         // Transaction 3 : valid
         let unsigned_tx = UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 30, 1).unwrap();
         let signature = bob_keypair.sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT)).unwrap();
         let signed_tx = SignedTransaction{from: unsigned_tx.from, to: unsigned_tx.to, amount: unsigned_tx.amount, nonce: unsigned_tx.nonce, timestamp: unsigned_tx.timestamp, signature};
 
-        let transfer = ledger.process_transaction(signed_tx);
+        ledger.process_transaction(signed_tx).unwrap();
         
-        assert_eq!(transfer, Ok("Transaction completed."));
         assert!(ledger.accounts.contains_key(&charlie.public_key));
         assert!(ledger.accounts.contains_key(&bob.public_key));
         assert_eq!(ledger.accounts[&charlie.public_key].public_key, charlie.public_key);
         assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].rbk, 30);
-        assert_eq!(ledger.accounts[&bob.public_key].rbk, 20);
+        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 30);
+        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 20);
 
         //Transaction 4 : invalid
         let unsigned_tx = UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 30, 2).unwrap();
         let signature = bob_keypair.sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT)).unwrap();
         let signed_tx = SignedTransaction{from: unsigned_tx.from, to: unsigned_tx.to, amount: unsigned_tx.amount, nonce: unsigned_tx.nonce, timestamp: unsigned_tx.timestamp, signature};
 
-        let transfer = ledger.process_transaction(signed_tx);
+        assert!(ledger.process_transaction(signed_tx).is_err());
         
-        assert_eq!(transfer, Err("Insufficient funds in sender account to make this transaction"));
         assert!(ledger.accounts.contains_key(&charlie.public_key));
         assert!(ledger.accounts.contains_key(&bob.public_key));
         assert_eq!(ledger.accounts[&charlie.public_key].public_key, charlie.public_key);
         assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].rbk, 30);
-        assert_eq!(ledger.accounts[&bob.public_key].rbk, 20);
+        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 30);
+        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 20);
 
         //Transaction 5 : valid
         let unsigned_tx = UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 5, 2).unwrap();
         let signature = bob_keypair.sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT)).unwrap();
         let signed_tx = SignedTransaction{from: unsigned_tx.from, to: unsigned_tx.to, amount: unsigned_tx.amount, nonce: unsigned_tx.nonce, timestamp: unsigned_tx.timestamp, signature};
 
-        let transfer = ledger.process_transaction(signed_tx);
+        ledger.process_transaction(signed_tx).unwrap();
         
-        assert_eq!(transfer, Ok("Transaction completed."));
         assert!(ledger.accounts.contains_key(&charlie.public_key));
         assert!(ledger.accounts.contains_key(&bob.public_key));
         assert_eq!(ledger.accounts[&charlie.public_key].public_key, charlie.public_key);
         assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].rbk, 35);
-        assert_eq!(ledger.accounts[&bob.public_key].rbk, 15);
+        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 35);
+        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 15);
 
         //Transaction 6 : invalid
         let unsigned_tx = UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 5, 5).unwrap();
         let signature = bob_keypair.sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT)).unwrap();
         let signed_tx = SignedTransaction{from: unsigned_tx.from, to: unsigned_tx.to, amount: unsigned_tx.amount, nonce: unsigned_tx.nonce, timestamp: unsigned_tx.timestamp, signature};
 
-        let transfer = ledger.process_transaction(signed_tx);
+        assert!(ledger.process_transaction(signed_tx).is_err());
         
-        assert_eq!(transfer, Err("Invalid nonce."));
         assert!(ledger.accounts.contains_key(&charlie.public_key));
         assert!(ledger.accounts.contains_key(&bob.public_key));
         assert_eq!(ledger.accounts[&charlie.public_key].public_key, charlie.public_key);
         assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].rbk, 35);
-        assert_eq!(ledger.accounts[&bob.public_key].rbk, 15);
+        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 35);
+        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 15);
 
         #[allow(unused)]
         {fs::remove_file(alice_path);
