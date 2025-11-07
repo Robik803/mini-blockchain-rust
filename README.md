@@ -24,8 +24,8 @@ Secure keystore system with:
 - `Keypair` : Implemented as an alias of `ed25519_dalek::SigningKey`
 
 **Public API**
-- `save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<&'static str, &'static str>`
-- `load_key(password: &str, path: &Path) -> Result<[u8;32], &'static str>`
+- `save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<(), KeyError>`
+- `load_key(password: &str, path: &Path) -> Result<[u8;32], KeyError>`
 - `generate_and_save(password: &str) -> Result<(PublicKey, PathBuf), KeyError>`
 - `pubkey_to_hex(public_key: &PublicKey) -> String`
 - `ensure_keys_dir_exists()`
