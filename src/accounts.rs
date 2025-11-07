@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use rand::rngs::OsRng;
+use crate::errors::{BlockchainError, KeyError};
 use crate::keys::{KeyPair, PublicKey, ensure_keys_dir_exists, load_key, pubkey_to_hex, save_key};
-use crate::errors::{KeyError, BlockchainError};
+use rand::rngs::OsRng;
+use std::path::{Path, PathBuf};
 
 /// Account containing a public key and a balance in torvalds
 #[derive(Debug, Clone)]
@@ -28,11 +28,18 @@ impl Account {
         // Verify that the path where the JSON file will be saved exists
         let dir = ensure_keys_dir_exists()?;
         let path = dir.join(format!("{pubkey_hex}.json"));
-        
+
         //
         save_key(password, &path, &private_key)?;
 
-        Ok((Self{public_key, torvalds: 0, nonce: 0}, path))
+        Ok((
+            Self {
+                public_key,
+                torvalds: 0,
+                nonce: 0,
+            },
+            path,
+        ))
     }
 
     /// Create an account from an existing private key
@@ -43,13 +50,13 @@ impl Account {
         Self {
             public_key,
             torvalds: 0,
-            nonce : 0
+            nonce: 0,
         }
     }
 
     /// Creates a new account from an encrypted private key stored in a JSON
-    pub fn import_from_json(path : &Path, password: &str) -> Result<Self, KeyError>{
-        let private_key = load_key(password, &path)?;
+    pub fn import_from_json(path: &Path, password: &str) -> Result<Self, KeyError> {
+        let private_key = load_key(password, path)?;
         Ok(Account::from_private_key(&private_key))
     }
 
@@ -75,7 +82,6 @@ impl Account {
             None => Err(BlockchainError::InsufficientFunds),
         }
     }
-
 }
 
 // Adding the trait Display to Account
@@ -121,10 +127,11 @@ mod tests {
     }
 
     #[test]
-    fn test_import_account_from_json(){
+    fn test_import_account_from_json() {
         let (account1, path1) = Account::new("123").unwrap();
 
-        let pubkey_hex = encode_hex(&account1.public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
+        let pubkey_hex =
+            encode_hex(&account1.public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
         let dir = ensure_keys_dir_exists().unwrap();
         let path = dir.join(format!("{pubkey_hex}.json"));
 
@@ -200,8 +207,9 @@ mod tests {
         assert_eq!(bob.torvalds, 23);
 
         #[allow(unused)]
-        {fs::remove_file(alice_path);
-        fs::remove_file(bob_path);}
+        {
+            fs::remove_file(alice_path);
+            fs::remove_file(bob_path);
+        }
     }
-
 }

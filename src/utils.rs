@@ -5,7 +5,7 @@ use std::{fmt::Write, num::ParseIntError};
 pub fn get_timestamp() -> u64 {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_secs(),
-        Err(e) => panic!("{} : time should go forward",e)        
+        Err(e) => panic!("{} : time should go forward", e),
     }
 }
 

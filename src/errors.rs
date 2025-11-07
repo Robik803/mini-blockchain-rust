@@ -1,12 +1,11 @@
-use std::{fmt, num::ParseIntError};
-use ed25519_dalek::SignatureError;
 use argon2::Error as EncryptionKeyError;
 use chacha20poly1305::aead::Error as CryptographyError;
+use ed25519_dalek::SignatureError;
 use serde_json::Error as SerializationError;
+use std::{fmt, num::ParseIntError};
 
 #[derive(Debug)]
-pub enum BlockchainError{
-
+pub enum BlockchainError {
     // Ledger errors
     InvalidTransaction(SignatureError),
     InvalidNonce,
@@ -15,19 +14,22 @@ pub enum BlockchainError{
     // Transaction errors
     InvalidNullAmount,
     InsufficientFunds,
-    TransactionIntoSameAccount
-
+    TransactionIntoSameAccount,
 }
 
 impl fmt::Display for BlockchainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            BlockchainError::InvalidTransaction(e) => return write!(f, "Invalid transaction, signature does not match: {e}"),
+            BlockchainError::InvalidTransaction(e) => {
+                return write!(f, "Invalid transaction, signature does not match: {e}");
+            }
             BlockchainError::InvalidNonce => "Nonce in transaction does not match nonce in ledger",
             BlockchainError::InvalidSenderAccount => "Account does not exist in ledger",
             BlockchainError::InvalidNullAmount => "Cannot transfer a null amount",
             BlockchainError::InsufficientFunds => "Insufficient funds to conduct the transaction",
-            BlockchainError::TransactionIntoSameAccount => "Cannot conduct a transaction with the same sender and receiver"
+            BlockchainError::TransactionIntoSameAccount => {
+                "Cannot conduct a transaction with the same sender and receiver"
+            }
         })
     }
 }
@@ -52,7 +54,7 @@ pub enum KeyError {
     KeySerializeError(SerializationError),
     KeyStoreError(ParseIntError),
     InvalidNonce,
-    InvalidPrivateKey
+    InvalidPrivateKey,
 }
 
 impl fmt::Display for KeyError {
@@ -66,9 +68,14 @@ impl fmt::Display for KeyError {
             KeyError::EncryptionError(e) => return write!(f, "Could not encrypt private key: {e}"),
             KeyError::DecryptionError(e) => return write!(f, "Could not decrypt private key: {e}"),
             KeyError::KeySerializeError(e) => return write!(f, "Error in key serialization: {e}"),
-            KeyError::KeyStoreError(e) => return write!(f, "Data found in file does not match a valid private key encrypted data: {e}"),
+            KeyError::KeyStoreError(e) => {
+                return write!(
+                    f,
+                    "Data found in file does not match a valid private key encrypted data: {e}"
+                );
+            }
             KeyError::InvalidNonce => "Invalid decryption nonce in private key file",
-            KeyError::InvalidPrivateKey => "Invalid private key found in file"
+            KeyError::InvalidPrivateKey => "Invalid private key found in file",
         })
     }
 }

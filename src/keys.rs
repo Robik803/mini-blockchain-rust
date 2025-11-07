@@ -1,18 +1,20 @@
-use argon2::{
-    self,
-    Argon2,
-    password_hash::{SaltString}
-};
+use argon2::{self, Argon2, password_hash::SaltString};
 #[allow(deprecated)]
-use chacha20poly1305::{aead::{Aead, KeyInit, generic_array::GenericArray}, ChaCha20Poly1305};
+use chacha20poly1305::{
+    ChaCha20Poly1305,
+    aead::{Aead, KeyInit, generic_array::GenericArray},
+};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::{Path,PathBuf}};
 use std::num::ParseIntError;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-use crate::utils::{get_timestamp, decode_hex, encode_hex};
 use crate::errors::KeyError;
+use crate::utils::{decode_hex, encode_hex, get_timestamp};
 
 /// Implemented as an alias of ed25519_dalek::VerifyingKey
 pub type PublicKey = VerifyingKey;
@@ -20,13 +22,17 @@ pub type PublicKey = VerifyingKey;
 pub type KeyPair = SigningKey;
 
 /// Turns a public key into a hex String
-pub fn pubkey_to_hex(public_key: &PublicKey) -> String{
+pub fn pubkey_to_hex(public_key: &PublicKey) -> String {
     encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "")
 }
 
 // Getting an encryption key from a password
 fn derive_key_from_password(password: &str, salt: &[u8]) -> Result<[u8; 32], argon2::Error> {
-    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, argon2::Params::new(19456, 2, 1, Some(32)).unwrap());
+    let argon2 = Argon2::new(
+        argon2::Algorithm::Argon2id,
+        argon2::Version::V0x13,
+        argon2::Params::new(19456, 2, 1, Some(32)).unwrap(),
+    );
     let mut key = [0u8; 32];
     argon2.hash_password_into(password.as_bytes(), salt, &mut key)?;
     Ok(key)
@@ -34,29 +40,33 @@ fn derive_key_from_password(password: &str, salt: &[u8]) -> Result<[u8; 32], arg
 
 // Encrypt the plaintext with Chacha20Poly1305
 #[allow(deprecated)]
-fn encrypt_chacha(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, [u8;12]), KeyError> {
+fn encrypt_chacha(key: &[u8; 32], plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 12]), KeyError> {
     let cypher = ChaCha20Poly1305::new_from_slice(key).unwrap();
     let mut nonce = [0u8; 12];
     OsRng.fill_bytes(&mut nonce);
-    match cypher.encrypt(GenericArray::from_slice(&nonce), plaintext){
+    match cypher.encrypt(GenericArray::from_slice(&nonce), plaintext) {
         Ok(cyphertext) => Ok((cyphertext, nonce)),
-        Err(e) => Err(KeyError::EncryptionError(e))
+        Err(e) => Err(KeyError::EncryptionError(e)),
     }
 }
 
 // Decrypt the plaintext with Chacha20Poly1305
 #[allow(deprecated)]
-fn decrypt_chacha(key: &[u8; 32], nonce: &[u8; 12], cyphertext: &[u8]) -> Result<Vec<u8>,KeyError> {
+fn decrypt_chacha(
+    key: &[u8; 32],
+    nonce: &[u8; 12],
+    cyphertext: &[u8],
+) -> Result<Vec<u8>, KeyError> {
     let cypher = ChaCha20Poly1305::new_from_slice(key).unwrap();
-    match cypher.decrypt(GenericArray::from_slice(nonce), cyphertext){
+    match cypher.decrypt(GenericArray::from_slice(nonce), cyphertext) {
         Ok(decrypted) => Ok(decrypted),
-        Err(e) => Err(KeyError::DecryptionError(e))
+        Err(e) => Err(KeyError::DecryptionError(e)),
     }
 }
 
 // Struct conatining the data to decrypt the private key.
 #[derive(Serialize, Deserialize)]
-struct Keystore{
+struct Keystore {
     version: u32,
     algorithm: String,
     pubkey_hex: String,
@@ -74,31 +84,37 @@ struct KdfInfo {
 }
 
 #[derive(Serialize, Deserialize)]
-struct KdfParams { m: u32, t: u32, p: u32 }
+struct KdfParams {
+    m: u32,
+    t: u32,
+    p: u32,
+}
 
-impl Keystore{
-
+impl Keystore {
     // Create a new Keystore
-    fn default(pubkey: &[u8], cyphertext: &[u8], nonce: &[u8; 12], salt: &[u8]) -> Self{
+    fn default(pubkey: &[u8], cyphertext: &[u8], nonce: &[u8; 12], salt: &[u8]) -> Self {
         let time = get_timestamp();
-        Keystore{
-            version : 1,
+        Keystore {
+            version: 1,
             algorithm: "chacha20poly1305".to_string(),
             pubkey_hex: encode_hex(pubkey),
             cyphertext_hex: encode_hex(cyphertext),
             nonce_hex: encode_hex(nonce),
-            kdf: KdfInfo{
+            kdf: KdfInfo {
                 name: "argon2id".to_string(),
                 salt_hex: encode_hex(salt),
-                params: KdfParams { m: 19456, t: 2, p: 1 }
+                params: KdfParams {
+                    m: 19456,
+                    t: 2,
+                    p: 1,
+                },
             },
-            created_at: time
+            created_at: time,
         }
     }
 
     // Extract decryption data from KeyStore
-    fn load_decryption_data(&self) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ParseIntError>{
-
+    fn load_decryption_data(&self) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ParseIntError> {
         let cyphertext = decode_hex(&self.cyphertext_hex)?;
 
         let nonce = decode_hex(&self.nonce_hex)?;
@@ -130,21 +146,16 @@ fn get_keys_dir() -> Option<PathBuf> {
 
 /// Ensure key storage directory exists
 pub fn ensure_keys_dir_exists() -> Result<PathBuf, KeyError> {
-    let path = match get_keys_dir(){
-        Some(path) => path,
-        None => return Err(KeyError::InvalidDataDirectory)
-    };
+    let path = get_keys_dir().ok_or(KeyError::InvalidDataDirectory)?;
     fs::create_dir_all(&path)?;
-    Ok(path)    
+    Ok(path)
 }
 
-
 /// Save the private key encrypted in a JSON file saved in the path given.
-pub fn save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<(), KeyError> {
-
+pub fn save_key(password: &str, path: &Path, private_key: &[u8; 32]) -> Result<(), KeyError> {
     // Check if there already a file with that name
-    if fs::exists(path)?{
-        return Err(KeyError::KeyOverwrite)
+    if fs::exists(path)? {
+        return Err(KeyError::KeyOverwrite);
     }
 
     // Create the salt to derive the encryption key from the password
@@ -170,11 +181,10 @@ pub fn save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<()
 }
 
 /// Load the private key encrypted in the JSON file saved in the path given.
-pub fn load_key(password: &str, path: &Path) -> Result<[u8;32], KeyError>{
-
+pub fn load_key(password: &str, path: &Path) -> Result<[u8; 32], KeyError> {
     // Check if the file exists
-    if !fs::exists(path)?{
-        return Err(KeyError::KeyNotFound)
+    if !fs::exists(path)? {
+        return Err(KeyError::KeyNotFound);
     }
 
     // Load data from JSON file
@@ -184,10 +194,7 @@ pub fn load_key(password: &str, path: &Path) -> Result<[u8;32], KeyError>{
     let (cyphertext, nonce_vec, salt) = data_stored.load_decryption_data()?;
 
     // Verify if nonce has a valid length
-    let nonce: [u8; 12] = match nonce_vec.try_into() {
-        Ok(n) => n,
-        Err(_) => return Err(KeyError::InvalidNonce)
-    };
+    let nonce: [u8; 12] = nonce_vec.try_into().map_err(|_| KeyError::InvalidNonce)?;
 
     // Derive encryption key from password
     let encryption_key = derive_key_from_password(password, &salt)?;
@@ -196,13 +203,11 @@ pub fn load_key(password: &str, path: &Path) -> Result<[u8;32], KeyError>{
     let private_key_vec = decrypt_chacha(&encryption_key, &nonce, &cyphertext)?;
 
     // Verify if private key has a valid length
-    let private_key: [u8; 32] = match private_key_vec.try_into() {
-        Ok(priv_key) => priv_key,
-        Err(_) => return Err(KeyError::InvalidPrivateKey)
-    };
-    
-    Ok(private_key)
+    let private_key: [u8; 32] = private_key_vec
+        .try_into()
+        .map_err(|_| KeyError::InvalidPrivateKey)?;
 
+    Ok(private_key)
 }
 
 #[cfg(test)]
@@ -211,7 +216,6 @@ mod tests {
 
     #[test]
     fn test_keystore_serialization_roundtrip() {
-
         let password = "1234prueba";
 
         let keypair: KeyPair = KeyPair::generate(&mut OsRng);
@@ -234,8 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn test_save_and_load_key(){
-
+    fn test_save_and_load_key() {
         let password = "1234prueba";
 
         let keypair: KeyPair = KeyPair::generate(&mut OsRng);
@@ -247,20 +250,21 @@ mod tests {
         let dir = ensure_keys_dir_exists().unwrap();
         let path = dir.join(format!("{pubkey_hex}.json"));
 
-        match save_key(password, &path, &private_key){
+        match save_key(password, &path, &private_key) {
             Ok(_) => println!("Key saved succesfully"),
-            Err(e) => println!("{:?}",e)
+            Err(e) => println!("{:?}", e),
         }
 
-        let private_key_2 = match load_key(password, &path){
+        let private_key_2 = match load_key(password, &path) {
             Ok(pk) => pk,
-            Err(e) => {println!("{:?}",e); [0u8;32]}
+            Err(e) => {
+                println!("{:?}", e);
+                [0u8; 32]
+            }
         };
 
-        assert_eq!(private_key,private_key_2);
+        assert_eq!(private_key, private_key_2);
 
         let _ = fs::remove_file(path);
-
     }
-
 }
