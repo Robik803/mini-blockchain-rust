@@ -180,6 +180,29 @@ pub fn save_key(password: &str, path: &Path, private_key: &[u8; 32]) -> Result<(
     Ok(())
 }
 
+/// Generate a new private key and save it
+pub fn generate_and_save(password: &str) -> Result<(PublicKey, PathBuf), KeyError>{
+    // Generate a new keypair
+    let mut csprng = OsRng;
+    let keypair: KeyPair = KeyPair::generate(&mut csprng);
+
+    // Extract the public and private keys
+    let private_key = keypair.to_bytes();
+    let public_key: PublicKey = keypair.verifying_key();
+
+    // Convert the public key into a hex to name the JSON file where the encrypted private key is sotred
+    let pubkey_hex = pubkey_to_hex(&public_key);
+
+    // Verify that the path where the JSON file will be saved exists
+    let dir = ensure_keys_dir_exists()?;
+    let path = dir.join(format!("{pubkey_hex}.json"));
+
+    // Save encrypted private key in a JSON file
+    save_key(password, &path, &private_key)?;
+
+    Ok((public_key, path))
+}
+
 /// Load the private key encrypted in the JSON file saved in the path given.
 pub fn load_key(password: &str, path: &Path) -> Result<[u8; 32], KeyError> {
     // Check if the file exists

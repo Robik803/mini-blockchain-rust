@@ -126,7 +126,7 @@ impl std::fmt::Display for SignedTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Transaction : {{ from: {} -> to: {}, amount : {} RBK, at timestamp({})}}",
+            "Transaction : {{ from: {} -> to: {}, amount : {} torvalds, at timestamp({})}}",
             pubkey_to_hex(&self.from),
             pubkey_to_hex(&self.to),
             self.amount,

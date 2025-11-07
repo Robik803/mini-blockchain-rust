@@ -1,6 +1,5 @@
 use crate::errors::{BlockchainError, KeyError};
-use crate::keys::{KeyPair, PublicKey, ensure_keys_dir_exists, load_key, pubkey_to_hex, save_key};
-use rand::rngs::OsRng;
+use crate::keys::{KeyPair, PublicKey, load_key, pubkey_to_hex, generate_and_save};
 use std::path::{Path, PathBuf};
 
 /// Account containing a public key and a balance in torvalds
@@ -14,23 +13,8 @@ pub struct Account {
 impl Account {
     /// Create a new account with a generated keypair and zero balance. Returns as second argument the path where the encyrpted private key is stored.
     pub fn new(password: &str) -> Result<(Self, PathBuf), KeyError> {
-        // Generate a new keypair
-        let mut csprng = OsRng;
-        let keypair: KeyPair = KeyPair::generate(&mut csprng);
-
-        // Extract the public and private keys
-        let private_key = keypair.to_bytes();
-        let public_key: PublicKey = keypair.verifying_key();
-
-        // Convert the public key into a hex to name the JSON file where the encrypted private key is sotred
-        let pubkey_hex = pubkey_to_hex(&public_key);
-
-        // Verify that the path where the JSON file will be saved exists
-        let dir = ensure_keys_dir_exists()?;
-        let path = dir.join(format!("{pubkey_hex}.json"));
-
-        //
-        save_key(password, &path, &private_key)?;
+        // Generate a new keypair and save private key encrypted in a JSON file
+        let (public_key, path) = generate_and_save(password)?;
 
         Ok((
             Self {
@@ -130,12 +114,7 @@ mod tests {
     fn test_import_account_from_json() {
         let (account1, path1) = Account::new("123").unwrap();
 
-        let pubkey_hex =
-            encode_hex(&account1.public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "");
-        let dir = ensure_keys_dir_exists().unwrap();
-        let path = dir.join(format!("{pubkey_hex}.json"));
-
-        let account2 = Account::import_from_json(&path, "123").unwrap();
+        let account2 = Account::import_from_json(&path1, "123").unwrap();
 
         assert_eq!(
             account1.public_key.as_bytes(),
