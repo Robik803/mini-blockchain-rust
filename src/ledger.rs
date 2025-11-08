@@ -1,19 +1,25 @@
 use std::collections::HashMap;
+use serde::{self, Serialize, Deserialize};
+use std::{
+    fs,
+    path::Path,
+};
 
 use crate::accounts::Account;
 use crate::errors::BlockchainError;
-use crate::keys::PublicKey;
-use crate::transactions::{self, CONTEXT, Message, SignedTransaction};
+use crate::keys::{PublicKey, pubkey_to_hex};
+use crate::transactions::{CONTEXT, Message, SignedTransaction};
 use crate::instructions::Instruction;
 
 /// Ledger containing the list of active accounts and the history of transactions
+#[derive(Serialize, Deserialize)]
 pub struct Ledger {
-    accounts: HashMap<PublicKey, Account>,
+    accounts: HashMap<String, Account>,
     history: Vec<SignedTransaction>,
 }
 
 impl Ledger {
-    fn accounts(&self) -> &HashMap<PublicKey, Account> {
+    fn accounts(&self) -> &HashMap<String, Account> {
         &self.accounts
     }
 
@@ -22,7 +28,8 @@ impl Ledger {
     }
 
     fn check_nonce(&self, sender_pubkey: &PublicKey, nonce: u64) -> bool {
-        self.accounts[sender_pubkey].nonce + 1 == nonce
+        let pubkey_hex = pubkey_to_hex(sender_pubkey);
+        self.accounts[&pubkey_hex].nonce + 1 == nonce
     }
 
     // Verifies if the transaction is valid and updates ledger
@@ -40,19 +47,22 @@ impl Ledger {
             &transaction.signature,
         )?;
 
+        let sender_pubkey_hex = pubkey_to_hex(&sender_pubkey);
+        let receiver_pubkey_hex = pubkey_to_hex(&receiver_pubkey);
+
         if amount == 0 {
             return Err(BlockchainError::InvalidNullAmount);
-        } else if !self.accounts.contains_key(&sender_pubkey) {
+        } else if !self.accounts.contains_key(&sender_pubkey_hex) {
             return Err(BlockchainError::InvalidSenderAccount);
         } else if !self.check_nonce(&sender_pubkey, transaction.nonce) {
             return Err(BlockchainError::InvalidNonce);
         }
 
-        match self.accounts[&sender_pubkey]
+        match self.accounts[&sender_pubkey_hex]
             .torvalds
             .checked_sub(transaction.amount)
         {
-            Some(new_sender_torvalds) => self.accounts.entry(sender_pubkey).and_modify(|account| {
+            Some(new_sender_torvalds) => self.accounts.entry(sender_pubkey_hex).and_modify(|account| {
                 account.torvalds = new_sender_torvalds;
                 account.nonce += 1
             }),
@@ -60,7 +70,7 @@ impl Ledger {
         };
 
         self.accounts
-            .entry(receiver_pubkey)
+            .entry(receiver_pubkey_hex)
             .and_modify(|account| account.torvalds += amount)
             .or_insert(Account {
                 public_key: receiver_pubkey,
@@ -79,6 +89,23 @@ impl Ledger {
             Instruction::Transfer(transaction) => self.process_transaction(transaction),
         }
     }
+
+    /// Save serialized ledger to file
+    pub fn save_to_file(&self, path: &Path) -> Result<(), BlockchainError> {
+        let serialized = serde_json::to_string_pretty(self)?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, serialized)?;
+        Ok(())
+    }
+
+    /// Load serialized ledger to file
+    pub fn load_json(path: &Path) -> Result<Self, BlockchainError> {
+        let data = fs::read_to_string(path)?;
+        let deserialized = serde_json::from_str(&data)?;
+        Ok(deserialized)
+    }
 }
 
 #[cfg(test)]
@@ -87,7 +114,7 @@ mod tests {
     use std::fs;
 
     use crate::accounts::Account;
-    use crate::keys::{KeyPair, load_key};
+    use crate::keys::{KeyPair, load_key, pubkey_to_hex};
     use crate::ledger::Ledger;
     use crate::transactions::{CONTEXT, Message, SignedTransaction, UnsignedTransaction};
 
@@ -104,9 +131,13 @@ mod tests {
             history: Vec::new(),
         };
 
+        let alice_pubkey_hex = pubkey_to_hex(&alice.public_key);
+        let bob_pubkey_hex = pubkey_to_hex(&bob.public_key);
+        let charlie_pubkey_hex = pubkey_to_hex(&charlie.public_key);
+
         ledger
             .accounts
-            .entry(alice.public_key)
+            .entry(alice_pubkey_hex.clone())
             .or_insert(alice.clone());
 
         let alice_private_key = load_key("123", &alice_path).unwrap();
@@ -135,15 +166,15 @@ mod tests {
 
         ledger.process_transaction(signed_tx).unwrap();
 
-        assert!(ledger.accounts.contains_key(&alice.public_key));
-        assert!(ledger.accounts.contains_key(&bob.public_key));
+        assert!(ledger.accounts.contains_key(&alice_pubkey_hex));
+        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
         assert_eq!(
-            ledger.accounts[&alice.public_key].public_key,
+            ledger.accounts[&alice_pubkey_hex].public_key,
             alice.public_key
         );
-        assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&alice.public_key].torvalds, 250);
-        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 50);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
+        assert_eq!(ledger.accounts[&alice_pubkey_hex].torvalds, 250);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 50);
         assert_eq!(ledger.history.last().unwrap().from, alice.public_key);
         assert_eq!(ledger.history.last().unwrap().to, bob.public_key);
         assert_eq!(ledger.history.last().unwrap().amount, 50);
@@ -165,10 +196,10 @@ mod tests {
 
         assert!(ledger.process_transaction(signed_tx).is_err());
 
-        assert!(!ledger.accounts.contains_key(&charlie.public_key));
-        assert!(ledger.accounts.contains_key(&bob.public_key));
-        assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 50);
+        assert!(!ledger.accounts.contains_key(&charlie_pubkey_hex));
+        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 50);
 
         // Transaction 3 : valid
         let unsigned_tx =
@@ -187,15 +218,15 @@ mod tests {
 
         ledger.process_transaction(signed_tx).unwrap();
 
-        assert!(ledger.accounts.contains_key(&charlie.public_key));
-        assert!(ledger.accounts.contains_key(&bob.public_key));
+        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
+        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
         assert_eq!(
-            ledger.accounts[&charlie.public_key].public_key,
+            ledger.accounts[&charlie_pubkey_hex].public_key,
             charlie.public_key
         );
-        assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 30);
-        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 20);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
+        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 30);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 20);
 
         //Transaction 4 : invalid
         let unsigned_tx =
@@ -214,15 +245,15 @@ mod tests {
 
         assert!(ledger.process_transaction(signed_tx).is_err());
 
-        assert!(ledger.accounts.contains_key(&charlie.public_key));
-        assert!(ledger.accounts.contains_key(&bob.public_key));
+        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
+        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
         assert_eq!(
-            ledger.accounts[&charlie.public_key].public_key,
+            ledger.accounts[&charlie_pubkey_hex].public_key,
             charlie.public_key
         );
-        assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 30);
-        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 20);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
+        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 30);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 20);
 
         //Transaction 5 : valid
         let unsigned_tx =
@@ -241,15 +272,15 @@ mod tests {
 
         ledger.process_transaction(signed_tx).unwrap();
 
-        assert!(ledger.accounts.contains_key(&charlie.public_key));
-        assert!(ledger.accounts.contains_key(&bob.public_key));
+        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
+        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
         assert_eq!(
-            ledger.accounts[&charlie.public_key].public_key,
+            ledger.accounts[&charlie_pubkey_hex].public_key,
             charlie.public_key
         );
-        assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 35);
-        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 15);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
+        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 35);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 15);
 
         //Transaction 6 : invalid
         let unsigned_tx =
@@ -268,15 +299,15 @@ mod tests {
 
         assert!(ledger.process_transaction(signed_tx).is_err());
 
-        assert!(ledger.accounts.contains_key(&charlie.public_key));
-        assert!(ledger.accounts.contains_key(&bob.public_key));
+        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
+        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
         assert_eq!(
-            ledger.accounts[&charlie.public_key].public_key,
+            ledger.accounts[&charlie_pubkey_hex].public_key,
             charlie.public_key
         );
-        assert_eq!(ledger.accounts[&bob.public_key].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie.public_key].torvalds, 35);
-        assert_eq!(ledger.accounts[&bob.public_key].torvalds, 15);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
+        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 35);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 15);
 
         #[allow(unused)]
         {

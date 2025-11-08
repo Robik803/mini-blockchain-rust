@@ -10,6 +10,8 @@ pub enum BlockchainError {
     InvalidTransaction(SignatureError),
     InvalidNonce,
     InvalidSenderAccount,
+    InvalidPath(std::io::Error),
+    LedgerSerializationError(SerializationError),
 
     // Transaction errors
     InvalidNullAmount,
@@ -20,11 +22,17 @@ pub enum BlockchainError {
 impl fmt::Display for BlockchainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            BlockchainError::InvalidTransaction(e) => {
-                return write!(f, "Invalid transaction, signature does not match: {e}");
-            }
+            BlockchainError::InvalidTransaction(err) => {
+                return write!(f, "Invalid transaction, signature does not match: {err}");
+            },
             BlockchainError::InvalidNonce => "Nonce in transaction does not match nonce in ledger",
             BlockchainError::InvalidSenderAccount => "Account does not exist in ledger",
+            BlockchainError::InvalidPath(err) => {
+                return write!(f, "Invalid path: {err}");
+            },
+            BlockchainError::LedgerSerializationError(err) => {
+                return write!(f, "Error in ledger serialization: {err}");
+            },
             BlockchainError::InvalidNullAmount => "Cannot transfer a null amount",
             BlockchainError::InsufficientFunds => "Insufficient funds to conduct the transaction",
             BlockchainError::TransactionIntoSameAccount => {
@@ -36,9 +44,21 @@ impl fmt::Display for BlockchainError {
 
 impl std::error::Error for BlockchainError {}
 
+impl From<std::io::Error> for BlockchainError {
+    fn from(err: std::io::Error) -> Self {
+        BlockchainError::InvalidPath(err)
+    }
+}
+
 impl From<SignatureError> for BlockchainError {
     fn from(err: SignatureError) -> Self {
         BlockchainError::InvalidTransaction(err)
+    }
+}
+
+impl From<SerializationError> for BlockchainError{
+    fn from(err: SerializationError) -> Self {
+        BlockchainError::LedgerSerializationError(err)
     }
 }
 
@@ -61,17 +81,17 @@ impl fmt::Display for KeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             KeyError::InvalidDataDirectory => "Could not access data directory",
-            KeyError::InvalidPath(e) => return write!(f, "Invalid path: {e}"),
+            KeyError::InvalidPath(err) => return write!(f, "Invalid path: {err}"),
             KeyError::KeyOverwrite => "File already exists",
             KeyError::KeyNotFound => "File does not exist",
-            KeyError::KeyDerivationError(e) => return write!(f, "Invalid password: {e}"),
-            KeyError::EncryptionError(e) => return write!(f, "Could not encrypt private key: {e}"),
-            KeyError::DecryptionError(e) => return write!(f, "Could not decrypt private key: {e}"),
-            KeyError::KeySerializeError(e) => return write!(f, "Error in key serialization: {e}"),
-            KeyError::KeyStoreError(e) => {
+            KeyError::KeyDerivationError(err) => return write!(f, "Invalid password: {err}"),
+            KeyError::EncryptionError(err) => return write!(f, "Could not encrypt private key: {err}"),
+            KeyError::DecryptionError(err) => return write!(f, "Could not decrypt private key: {err}"),
+            KeyError::KeySerializeError(err) => return write!(f, "Error in key serialization: {err}"),
+            KeyError::KeyStoreError(err) => {
                 return write!(
                     f,
-                    "Data found in file does not match a valid private key encrypted data: {e}"
+                    "Data found in file does not match a valid private key encrypted data: {err}"
                 );
             }
             KeyError::InvalidNonce => "Invalid decryption nonce in private key file",

@@ -5,3 +5,4 @@ mod keys;
 mod ledger;
 mod transactions;
 mod utils;
+mod serialization;

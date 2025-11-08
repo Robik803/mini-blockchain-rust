@@ -1,10 +1,14 @@
-use crate::errors::{BlockchainError, KeyError};
-use crate::keys::{KeyPair, PublicKey, load_key, pubkey_to_hex, generate_and_save};
+use serde::{self, Serialize, Deserialize};
 use std::path::{Path, PathBuf};
 
+use crate::serialization::pubkey;
+use crate::errors::{BlockchainError, KeyError};
+use crate::keys::{KeyPair, PublicKey, load_key, pubkey_to_hex, generate_and_save};
+
 /// Account containing a public key and a balance in torvalds
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
+    #[serde(with = "pubkey")]
     pub public_key: PublicKey,
     pub torvalds: u64,
     pub nonce: u64,

@@ -1,6 +1,8 @@
 use ed25519_dalek::{Digest, Signature};
 use sha2::Sha512;
 use std::cmp::PartialEq;
+use serde::{self, Serialize, Deserialize};
+use crate::serialization::{pubkey, signature};
 
 use crate::errors::BlockchainError;
 use crate::keys::{PublicKey, pubkey_to_hex};
@@ -84,12 +86,16 @@ impl Message for UnsignedTransaction {
 }
 
 /// Transaction between two accounts
+#[derive(Serialize, Deserialize)]
 pub struct SignedTransaction {
+    #[serde(with = "pubkey")]
     pub from: PublicKey,
+    #[serde(with = "pubkey")]
     pub to: PublicKey,
     pub amount: u64,
     pub nonce: u64,
     pub timestamp: u64,
+    #[serde(with = "signature")]
     pub signature: Signature,
 }
 
