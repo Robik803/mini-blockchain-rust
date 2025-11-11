@@ -16,7 +16,7 @@ pub mod pubkey {
     where D: Deserializer<'de> {
         let bytes: Vec<u8> = Deserialize::deserialize(d)?;
         let public_key: [u8; 32] = bytes.try_into().map_err(|_| D::Error::custom("Invalid public key"))?;
-        PublicKey::from_bytes(&public_key).map_err(D::Error::custom)
+        PublicKey::from_bytes(&public_key).map_err(|_| D::Error::custom("Invalid public key"))
     }
 }
 
