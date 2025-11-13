@@ -8,8 +8,9 @@ use std::{
 use crate::accounts::Account;
 use crate::errors::BlockchainError;
 use crate::keys::{PublicKey, pubkey_to_hex};
-use crate::transactions::{CONTEXT, Message, SignedTransaction};
+use crate::transactions::{Message, SignedTransaction};
 use crate::instructions::Instruction;
+use crate::constants::CONTEXT;
 
 /// Ledger containing the list of active accounts and the history of transactions
 #[derive(Serialize, Deserialize)]
@@ -30,7 +31,7 @@ impl Ledger {
     pub fn new(new_accounts: Vec<Account>) -> Result<Self, BlockchainError>{
         let mut accounts = HashMap::new();
         for account in &new_accounts{
-            let account_pubkey_hex = pubkey_to_hex(&account.public_key);
+            let account_pubkey_hex = pubkey_to_hex(&account.public_key());
             if accounts.contains_key(&account_pubkey_hex){
                 return Err(BlockchainError::LedgerCreationError);
             }
@@ -44,56 +45,52 @@ impl Ledger {
 
     fn check_nonce(&self, sender_pubkey: &PublicKey, nonce: u64) -> bool {
         let pubkey_hex = pubkey_to_hex(sender_pubkey);
-        self.accounts[&pubkey_hex].nonce + 1 == nonce
+        self.accounts[&pubkey_hex].nonce() + 1 == nonce
+    }
+
+    pub(crate) fn reward_validator(&mut self, public_key: &PublicKey, amount: u64) -> Result<(), BlockchainError>{
+        let pubkey_hex = pubkey_to_hex(public_key);
+        if !self.accounts.contains_key(&pubkey_hex) {
+            return Err(BlockchainError::InvalidSenderAccount);
+        }
+        self.accounts.get_mut(&pubkey_hex).unwrap().deposit(amount)?;
+        Ok(())
     }
 
     // Verifies if the transaction is valid and updates ledger
-    fn process_transaction(
+    pub(crate) fn process_transaction(
         &mut self,
         transaction: SignedTransaction,
     ) -> Result<(), BlockchainError> {
-        let amount = transaction.amount;
-        let sender_pubkey = transaction.from;
-        let receiver_pubkey = transaction.to;
-
-        sender_pubkey.verify_prehashed(
-            transaction.prehashed(),
-            Some(CONTEXT),
-            &transaction.signature,
-        )?;
+        let amount = transaction.amount();
+        let sender_pubkey = *transaction.sender();
+        let receiver_pubkey = *transaction.receiver();
 
         let sender_pubkey_hex = pubkey_to_hex(&sender_pubkey);
         let receiver_pubkey_hex = pubkey_to_hex(&receiver_pubkey);
 
-        if amount == 0 {
-            return Err(BlockchainError::InvalidNullAmount);
-        } else if !self.accounts.contains_key(&sender_pubkey_hex) {
+        if !self.accounts.contains_key(&sender_pubkey_hex) {
             return Err(BlockchainError::InvalidSenderAccount);
-        } else if !self.check_nonce(&sender_pubkey, transaction.nonce) {
+        } else if !self.check_nonce(&sender_pubkey, transaction.nonce()) {
             return Err(BlockchainError::InvalidNonce);
+        } else if amount == 0 {
+            return Err(BlockchainError::InvalidNullAmount);
         } else if sender_pubkey == receiver_pubkey {
             return Err(BlockchainError::TransactionIntoSameAccount);
         }
+        sender_pubkey.verify_prehashed(
+            transaction.prehashed(),
+            Some(CONTEXT),
+            &transaction.signature(),
+        )?;
 
-        match self.accounts[&sender_pubkey_hex]
-            .torvalds
-            .checked_sub(transaction.amount)
-        {
-            Some(new_sender_torvalds) => self.accounts.entry(sender_pubkey_hex).and_modify(|account| {
-                account.torvalds = new_sender_torvalds;
-                account.nonce += 1
-            }),
-            None => return Err(BlockchainError::InsufficientFunds),
-        };
+        self.accounts.get_mut(&sender_pubkey_hex).unwrap().withdraw(amount)?;
+        self.accounts.get_mut(&sender_pubkey_hex).unwrap().increment_nonce();
 
         self.accounts
             .entry(receiver_pubkey_hex)
-            .and_modify(|account| account.torvalds += amount)
-            .or_insert(Account {
-                public_key: receiver_pubkey,
-                torvalds: amount,
-                nonce: 0,
-            });
+            .or_insert(Account::with_balance(receiver_pubkey, 0))
+            .deposit(amount)?;
 
         self.history.push(transaction);
 
@@ -141,15 +138,15 @@ mod tests {
         let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
         let bob = Account::from_private_key(bob_keypair.as_bytes());
 
-        let alice_pubkey_hex = pubkey_to_hex(&alice.public_key);
-        let bob_pubkey_hex = pubkey_to_hex(&bob.public_key);
+        let alice_pubkey_hex = pubkey_to_hex(&alice.public_key());
+        let bob_pubkey_hex = pubkey_to_hex(&bob.public_key());
 
         let _ = alice.deposit(300);
         let accounts = vec![alice.clone()];
 
         let mut ledger = Ledger::new(accounts).unwrap();
 
-        let unsigned_tx = UnsignedTransaction::new(&alice.public_key, &bob.public_key, 50, 1).unwrap();
+        let unsigned_tx = UnsignedTransaction::new(&alice.public_key(), &bob.public_key(), 50, 1).unwrap();
         let signature = alice_keypair
             .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
             .unwrap();
@@ -160,15 +157,15 @@ mod tests {
         assert!(ledger.accounts.contains_key(&alice_pubkey_hex));
         assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
         assert_eq!(
-            ledger.accounts[&alice_pubkey_hex].public_key,
-            alice.public_key
+            ledger.accounts[&alice_pubkey_hex].public_key(),
+            alice.public_key()
         );
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&alice_pubkey_hex].torvalds, 250);
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 50);
-        assert_eq!(ledger.history.last().unwrap().from, alice.public_key);
-        assert_eq!(ledger.history.last().unwrap().to, bob.public_key);
-        assert_eq!(ledger.history.last().unwrap().amount, 50);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key(), bob.public_key());
+        assert_eq!(ledger.accounts[&alice_pubkey_hex].torvalds(), 250);
+        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds(), 50);
+        assert_eq!(ledger.history.last().unwrap().sender(), &alice.public_key());
+        assert_eq!(ledger.history.last().unwrap().receiver(), &bob.public_key());
+        assert_eq!(ledger.history.last().unwrap().amount(), 50);
     }
 
     #[test]
@@ -183,7 +180,7 @@ mod tests {
 
         let mut ledger = Ledger::new(accounts).unwrap();
 
-        let unsigned_tx = UnsignedTransaction::new(&alice.public_key, &bob.public_key, 50, 1).unwrap();
+        let unsigned_tx = UnsignedTransaction::new(&alice.public_key(), &bob.public_key(), 50, 1).unwrap();
         let signature = alice_keypair
             .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
             .unwrap();

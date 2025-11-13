@@ -1,16 +1,4 @@
-[package]
-name = "mini_blockchain"
-path = "src/lib.rs"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-argon2 = "0.5.3"
-chacha20poly1305 = "0.10.1"
-dirs = "6.0.0"
-ed25519-dalek = { version = "2.2.0", features = ["rand_core","digest"] }
-rand = "0.8.5"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-sha2 = "0.10.9"
-zeroize = "1.8.2"
+[workspace]
+members = [
+    "core"
+]

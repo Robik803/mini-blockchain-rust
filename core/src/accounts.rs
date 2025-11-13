@@ -1,20 +1,33 @@
-use serde::{self, Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use std::path::{Path, PathBuf};
 
 use crate::serialization::pubkey;
 use crate::errors::{BlockchainError, KeyError};
-use crate::keys::{KeyPair, PublicKey, load_key, pubkey_to_hex, generate_and_save};
+use crate::keys::{PublicKey, load_key, pubkey_to_hex, public_key_from_private, generate_and_save};
 
 /// Account containing a public key and a balance in torvalds
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
     #[serde(with = "pubkey")]
-    pub public_key: PublicKey,
-    pub torvalds: u64,
-    pub nonce: u64,
+    public_key: PublicKey,
+    torvalds: u64,
+    nonce: u64,
 }
 
 impl Account {
+
+    pub fn public_key(&self) -> PublicKey{
+        self.public_key
+    }
+
+    pub fn torvalds(&self) -> u64{
+        self.torvalds
+    }
+
+    pub fn nonce(&self) -> u64{
+        self.nonce
+    }
+
     /// Create a new account with a generated keypair and zero balance. Returns as second argument the path where the encyrpted private key is stored.
     pub fn new(password: &str) -> Result<(Self, PathBuf), KeyError> {
         // Generate a new keypair and save private key encrypted in a JSON file
@@ -32,14 +45,20 @@ impl Account {
 
     /// Create an account from an existing private key
     pub fn from_private_key(private_key_bytes: &[u8; 32]) -> Self {
-        let signing_key: KeyPair = KeyPair::from_bytes(private_key_bytes);
-        let public_key = signing_key.verifying_key();
+        let public_key = public_key_from_private(private_key_bytes);
 
         Self {
             public_key,
             torvalds: 0,
             nonce: 0,
         }
+    }
+
+    pub fn with_balance(public_key: PublicKey, amount: u64) -> Self{
+        Self {
+            public_key,
+            torvalds: amount,
+            nonce: 0 }
     }
 
     /// Creates a new account from an encrypted private key stored in a JSON
@@ -49,7 +68,7 @@ impl Account {
     }
 
     /// Deposit an amount into the account
-    pub fn deposit(&mut self, amount: u64) -> Result<(), BlockchainError> {
+    pub(crate) fn deposit(&mut self, amount: u64) -> Result<(), BlockchainError> {
         if amount == 0 {
             return Err(BlockchainError::InvalidNullAmount);
         }
@@ -58,7 +77,7 @@ impl Account {
     }
 
     /// Withdraw an amount from account
-    pub fn withdraw(&mut self, amount: u64) -> Result<(), BlockchainError> {
+    pub(crate) fn withdraw(&mut self, amount: u64) -> Result<(), BlockchainError> {
         if amount == 0 {
             return Err(BlockchainError::InvalidNullAmount);
         }
@@ -69,6 +88,10 @@ impl Account {
             }
             None => Err(BlockchainError::InsufficientFunds),
         }
+    }
+
+    pub(crate) fn increment_nonce(&mut self){
+        self.nonce += 1;
     }
 }
 

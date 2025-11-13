@@ -1,166 +1,61 @@
-# Mini Blockchain Simulator in Rust 🦀🔗
+# 🌐 mini-blockchain-rust (Workspace)
 
-This project is a personal learning experiment to understand blockchain internals by **rebuilding the essential components from scratch** in Rust — inspired by Solana's account model and cryptography.
+This repository contains a modular Rust workspace implementing a minimal, deterministic blockchain prototype.
+The project is intentionally split into multiple crates to mirror the structure of real-world blockchain ecosystems:
+- `core/` — Execution engine (accounts, transactions, ledger, keystore, etc.)
+- *_(Coming next)_* `validator/` — Validator node (consensus, slot processing, reward logic)
+- *_(Coming next)_* `cli/` — Command-line wallet & transaction tool
+- *_(Coming next)_* `rpc/` — Lightweight HTTP RPC server for clients
 
-## Overview
-A hands-on Rust project to understand blockchain fundamentals by developing a small, modular simulator.  
-Focus areas: ownership, traits, error handling, serialization, and CLI design.
-
----
-
-## ✅ Current Features
-
-### 🔐 Key Management (Off-chain)
-
-Secure keystore system with:
-- Private key encryption using Argon2id + Chacha20Poly1305
-- JSON keystore format (public key, ciphertext, nonce, salt, metadata)
-- Key derivation from password
-- Load/save functions with error propagation
-- Platform-safe storage directory resolution
-
-**Aliases**
-- `PublicKey` : Implemented as an alias of `ed25519_dalek::VerifyingKey`
-- `Keypair` : Implemented as an alias of `ed25519_dalek::SigningKey`
-
-**Public API**
-- `save_key(password: &str, path: &Path, private_key: &[u8;32]) -> Result<(), KeyError>`
-- `load_key(password: &str, path: &Path) -> Result<[u8;32], KeyError>`
-- `generate_and_save(password: &str) -> Result<(PublicKey, PathBuf), KeyError>`
-- `pubkey_to_hex(public_key: &PublicKey) -> String`
-- `ensure_keys_dir_exists()`
+The goal of this workspace is to build a fully functional blockchain prototype, step by step, following a clean modular architecture.
 
 ---
 
-### 💼 Account System (State Layer)
-
-Imitates blockchain account model.
-
-**Struct**
-- `Account`
-
-**Core methods**
-- `new(password: &str) -> (Account, PathBuf)`
-- `from_private_key(private_key_bytes: &[u8;32]) -> Account`
-- `import_from_json(path: &Path, password: &str) -> Account`
-- `show(&self)`
-- `deposit(...)`
-- `withdraw(...)`
-
-Implements `Display` for human-readable output.
-
----
-
-### 💱 Transactions
-
-System allowing to verify transactions validity.
-
-**Traits**
-- `Message`
-
-**Structs**
-- `UnsignedTransaction{from, to, amount, nonce, timestamp} impl Messasge`
-- `SignedTransaction{from, to, amount, nonce, timestamp, signature} impl Message`
-
-**Core methods**
-- `Message::`
-    - `sender(&self)-> &PublicKey`
-    - `receiver(&self) -> &PublicKey`
-    - `amount(&self) -> u64`
-    - `nonce(&self) -> u64`
-    - `timestamp(&self) -> u64`
-    - `to_bytes(&self) -> Vec<u8>`
-    - `prehashed(&self) -> Sha512`
-- `UnsignedTransaction::new(from: &PublicKey, to: &PublicKey, amount: u64, nonce: u64)`
----
-
-### 📝 Instructions
-
-Defines the interface through which actions are executed on the ledger.
-
-**Enums**
-- `Instruction{Transfer(SignedTransaction)}`
-
----
-
-### 📜 Ledger (Execution Layer)
-
-Early ledger system laying groundwork for blockchain transaction flow.
-
-**Structs**
-- `Ledger`
-
-**Core methods**
-- `Ledger::execute_instruction(instruction: Instruction)` — public entry point for all ledger actions (currently delegates to internal process_transaction).
-
----
-
-### 🛠️ Utils
-
-**Core methods**
-- `get_timestamp() -> u64`
-- `encode_hex` / `decode_hex`
-
----
-
-### 🧪 Testing
-
-All modules have tests verifying:
-- Key save/load round-trip
-- Account creation & balance changes
-- JSON keystore validity
-- Transaction creation
-- Transaction processing by Ledger
-- Complete flow integration test
-
-**All tests currently passing ✅**
-
----
-
-## 🧩 Project Structure
+## 🧱 Workspace Structure
 
 ```text
-src/
-├─ accounts.rs # Account model & basic local transfers
-├─ keys.rs # Key storage & encryption
-├─ ledger.rs # Ledger skeleton
-├─ transactions.rs # Transaction structure
-├─ serialization.rs # Modules allowing ledger to be serialized and stored
-├─ Instructions.rs # Instruction structure
-├─ utils.rs # Utilities
-├─ errors.rs # Error handling
-├─ lib.rs
-tests/
-└─ integration_test.rs
+.
+├── core/                    # mini-blockchain-core crate
+│   ├── src/
+│   └── Cargo.toml
+├── validator/               # (to be created)
+├── cli/                     # (to be created)
+├── rpc/                     # (to be created)
+├── Cargo.toml               # workspace definition
+└── README.md                # this file
+
 ```
 
-## 🎯 Roadmap
-
-### Done ✅
-- Secure keystore
-- Account system
-- Local balance ops
-- Transaction struct + hashing + validation rules
-- Ledger signature verification
-- Add nonce tracking per account
-
-### Next Steps 🚧
-- Build CLI for wallet commands
-
-### Later 🚀
-- Blocks or PoH-like history
-- Networking (validator simulation)
-- CLI wallet UX polish
-- RPC-style interface for sending txs
-- Web UI explorer
 ---
 
-## 📚 Purpose
+## 🚀 Current Status
+### ✔️ Completed
+- Cryptographic keypairs (Ed25519)
+- Keystore encryption (Argon2id + ChaCha20Poly1305)
+- Accounts: balances + controlled mutation
+- Unsigned & signed transactions
+- Nonce-based replay-protection
+- Instruction layer
+- Deterministic ledger with full serialization
+- Comprehensive unit & integration tests
 
-This is not a cryptocurrency — it’s a **hands-on educational blockchain simulator**, building core concepts step-by-step to deeply understand practical development before moving to on-chain programs with Anchor on Solana.
+### 🔧 In Progress (next phases)
+- Validator implementation
+- CLI wallet
+- RPC server
+- Networking model
+- Reward/staking mechanics
 
-## 🧠 Status
+---
 
-> **Actively being built.**  
-Core program complete.  
-Now entering **CLI** phase.
+## 🧪 Running all workspace tests
+
+```bash
+cargo test --workspace
+```
+
+---
+
+## 📄 License
+
+All crates licensed under [MIT license](http://opensource.org/licenses/MIT).

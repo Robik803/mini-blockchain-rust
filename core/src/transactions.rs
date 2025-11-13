@@ -6,9 +6,8 @@ use crate::serialization::{pubkey, signature};
 
 use crate::errors::BlockchainError;
 use crate::keys::{PublicKey, pubkey_to_hex};
-use crate::utils::get_timestamp;
-
-pub const CONTEXT: &[u8] = b"Robik803MiniBlochainTxnSigning";
+use crate::utils::{get_timestamp, encode_hex};
+use crate::constants::CONTEXT;
 
 pub trait Message {
     fn sender(&self) -> &PublicKey;
@@ -32,14 +31,19 @@ pub trait Message {
         hash.update(self.to_bytes());
         hash
     }
+
+    fn hash(&self) -> [u8; 64] {
+    let pre = self.prehashed();
+    pre.finalize().into()
+    }
 }
 
 pub struct UnsignedTransaction {
-    pub from: PublicKey,
-    pub to: PublicKey,
-    pub amount: u64,
-    pub nonce: u64,
-    pub timestamp: u64,
+    from: PublicKey,
+    to: PublicKey,
+    amount: u64,
+    nonce: u64,
+    timestamp: u64,
 }
 
 impl UnsignedTransaction {
@@ -89,17 +93,21 @@ impl Message for UnsignedTransaction {
 #[derive(Serialize, Deserialize)]
 pub struct SignedTransaction {
     #[serde(with = "pubkey")]
-    pub from: PublicKey,
+    from: PublicKey,
     #[serde(with = "pubkey")]
-    pub to: PublicKey,
-    pub amount: u64,
-    pub nonce: u64,
-    pub timestamp: u64,
+    to: PublicKey,
+    amount: u64,
+    nonce: u64,
+    timestamp: u64,
     #[serde(with = "signature")]
-    pub signature: Signature,
+    signature: Signature,
 }
 
 impl SignedTransaction {
+    pub fn signature(&self) -> &Signature{
+        &self.signature
+    }
+
     pub fn new(unsigned_tx: UnsignedTransaction, signature: Signature) -> Result<Self, BlockchainError>{
         unsigned_tx.from.verify_prehashed(unsigned_tx.prehashed(), Some(CONTEXT), &signature)?;
         Ok(SignedTransaction {
@@ -146,7 +154,8 @@ impl std::fmt::Display for SignedTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Transaction : {{ from: {} -> to: {}, amount : {} torvalds, at timestamp({})}}",
+            "Transaction {} : {{ from: {} -> to: {}, amount : {} torvalds, at timestamp({})}}",
+            encode_hex(&self.hash()),
             pubkey_to_hex(&self.from),
             pubkey_to_hex(&self.to),
             self.amount,
@@ -189,5 +198,21 @@ mod tests {
         let transaction =
             UnsignedTransaction::new(&alice_pubkey, &alice_pubkey, 50, 0);
         assert!(matches!(transaction, Err(BlockchainError::TransactionIntoSameAccount)));
+    }
+
+    #[test]
+    fn test_transaction_hash(){
+        let alice_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let alice_pubkey = alice_keypair.verifying_key();
+
+        let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let bob_pubkey = bob_keypair.verifying_key();
+
+        let unsigned_tx_1 =
+            UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
+        let unsigned_tx_2 =
+            UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
+            
+        assert_eq!(unsigned_tx_1.hash(), unsigned_tx_2.hash())
     }
 }

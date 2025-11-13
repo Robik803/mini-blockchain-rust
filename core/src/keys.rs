@@ -7,13 +7,12 @@ use chacha20poly1305::{
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
-use std::num::ParseIntError;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-use crate::errors::KeyError;
+use crate::errors::{HexStringError, KeyError};
 use crate::utils::{decode_hex, encode_hex, get_timestamp};
 
 /// Implemented as an alias of ed25519_dalek::VerifyingKey
@@ -24,6 +23,11 @@ pub type KeyPair = SigningKey;
 /// Turns a public key into a hex String
 pub fn pubkey_to_hex(public_key: &PublicKey) -> String {
     encode_hex(&public_key.to_bytes()).replace(&['[', ']', ',', ' '][..], "")
+}
+
+pub fn public_key_from_private(private: &[u8; 32]) -> PublicKey {
+    let keypair = KeyPair::from_bytes(private);
+    keypair.verifying_key()
 }
 
 // Getting an encryption key from a password
@@ -92,7 +96,7 @@ struct KdfParams {
 
 impl Keystore {
     // Create a new Keystore
-    fn default(pubkey: &[u8], cyphertext: &[u8], nonce: &[u8; 12], salt: &[u8]) -> Self {
+    fn new(pubkey: &[u8], cyphertext: &[u8], nonce: &[u8; 12], salt: &[u8]) -> Self {
         let time = get_timestamp();
         Keystore {
             version: 1,
@@ -114,7 +118,7 @@ impl Keystore {
     }
 
     // Extract decryption data from KeyStore
-    fn load_decryption_data(&self) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), ParseIntError> {
+    fn load_decryption_data(&self) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), HexStringError> {
         let cyphertext = decode_hex(&self.cyphertext_hex)?;
 
         let nonce = decode_hex(&self.nonce_hex)?;
@@ -145,7 +149,7 @@ fn get_keys_dir() -> Option<PathBuf> {
 }
 
 /// Ensure key storage directory exists
-pub fn ensure_keys_dir_exists() -> Result<PathBuf, KeyError> {
+fn ensure_keys_dir_exists() -> Result<PathBuf, KeyError> {
     let path = get_keys_dir().ok_or(KeyError::InvalidDataDirectory)?;
     fs::create_dir_all(&path)?;
     Ok(path)
@@ -172,7 +176,7 @@ pub fn save_key(password: &str, path: &Path, private_key: &[u8; 32]) -> Result<(
     let public_key = KeyPair::from_bytes(private_key).verifying_key().to_bytes();
 
     // Creating the Keystore to serialize
-    let to_store = Keystore::default(&public_key, &cyphertext, &nonce, salt);
+    let to_store = Keystore::new(&public_key, &cyphertext, &nonce, salt);
 
     // Saving the serialized KeyStore in a JSON file
     save_json(path, &to_store)?;
@@ -251,7 +255,7 @@ mod tests {
         let (cyphertext, nonce) = encrypt_chacha(&encryption_key, &private_key).unwrap();
         let public_key = KeyPair::from_bytes(&private_key).verifying_key().to_bytes();
 
-        let ks1 = Keystore::default(&public_key, &cyphertext, &nonce, salt);
+        let ks1 = Keystore::new(&public_key, &cyphertext, &nonce, salt);
 
         let json = serde_json::to_string_pretty(&ks1).unwrap();
         let ks2: Keystore = serde_json::from_str(&json).unwrap();

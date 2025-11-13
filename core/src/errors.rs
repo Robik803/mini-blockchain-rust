@@ -74,7 +74,7 @@ pub enum KeyError {
     EncryptionError(CryptographyError),
     DecryptionError(CryptographyError),
     KeySerializeError(SerializationError),
-    KeyStoreError(ParseIntError),
+    InvalidKeystoreFormat(HexStringError),
     InvalidNonce,
     InvalidPrivateKey,
 }
@@ -90,7 +90,7 @@ impl fmt::Display for KeyError {
             KeyError::EncryptionError(err) => return write!(f, "Could not encrypt private key: {err}"),
             KeyError::DecryptionError(err) => return write!(f, "Could not decrypt private key: {err}"),
             KeyError::KeySerializeError(err) => return write!(f, "Error in key serialization: {err}"),
-            KeyError::KeyStoreError(err) => {
+            KeyError::InvalidKeystoreFormat(err) => {
                 return write!(
                     f,
                     "Data found in file does not match a valid private key encrypted data: {err}"
@@ -116,14 +116,35 @@ impl From<EncryptionKeyError> for KeyError {
     }
 }
 
-impl From<ParseIntError> for KeyError {
-    fn from(err: ParseIntError) -> Self {
-        KeyError::KeyStoreError(err)
+impl From<HexStringError> for KeyError {
+    fn from(err: HexStringError) -> Self {
+        KeyError::InvalidKeystoreFormat(err)
     }
 }
 
 impl From<SerializationError> for KeyError {
     fn from(err: SerializationError) -> Self {
         KeyError::KeySerializeError(err)
+    }
+}
+
+#[derive(Debug)]
+pub enum HexStringError {
+    InvalidHexLength,
+    InvalidHex(ParseIntError)
+}
+
+impl fmt::Display for HexStringError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+         HexStringError::InvalidHex(err) => return write!(f, "Invalid hex string: {err}"),
+         HexStringError::InvalidHexLength => "Hex string must have even length"
+        })
+    }
+}
+
+impl From<ParseIntError> for HexStringError{
+    fn from(err: ParseIntError) -> Self {
+        HexStringError::InvalidHex(err)
     }
 }
