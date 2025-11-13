@@ -124,8 +124,9 @@ src/
 ├─ accounts.rs # Account model & basic local transfers
 ├─ keys.rs # Key storage & encryption
 ├─ ledger.rs # Ledger skeleton
-├─ serialization.rs # Modules allowing ledger to be serialized and stored
 ├─ transactions.rs # Transaction structure
+├─ serialization.rs # Modules allowing ledger to be serialized and stored
+├─ Instructions.rs # Instruction structure
 ├─ utils.rs # Utilities
 ├─ errors.rs # Error handling
 ├─ lib.rs
