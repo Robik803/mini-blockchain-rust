@@ -185,7 +185,7 @@ pub fn save_key(password: &str, path: &Path, private_key: &[u8; 32]) -> Result<(
 }
 
 /// Generate a new private key and save it
-pub fn generate_and_save(password: &str) -> Result<(PublicKey, PathBuf), KeyError>{
+pub fn generate_and_save(password: &str) -> Result<(PublicKey, PathBuf), KeyError> {
     // Generate a new keypair
     let mut csprng = OsRng;
     let keypair: KeyPair = KeyPair::generate(&mut csprng);

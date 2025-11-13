@@ -1,17 +1,17 @@
 pub use accounts::Account;
-pub use transactions::{SignedTransaction, UnsignedTransaction, Message};
+pub use errors::{BlockchainError, KeyError};
 pub use instructions::Instruction;
 pub use ledger::Ledger;
-pub use errors::{BlockchainError, KeyError};
+pub use transactions::{Message, SignedTransaction, UnsignedTransaction};
 
 // Public API surface
 pub mod accounts;
-pub mod transactions;
-pub mod instructions;
-pub mod ledger;
-pub mod errors;
-pub mod keys;
 pub mod constants;
+pub mod errors;
+pub mod instructions;
+pub mod keys;
+pub mod ledger;
+pub mod transactions;
 
 // Internal-only modules
 mod serialization;

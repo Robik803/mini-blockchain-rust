@@ -23,18 +23,20 @@ pub enum BlockchainError {
 impl fmt::Display for BlockchainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            BlockchainError::LedgerCreationError => "Cannot create a ledger where the same account appears multiple times in definition",
+            BlockchainError::LedgerCreationError => {
+                "Cannot create a ledger where the same account appears multiple times in definition"
+            }
             BlockchainError::InvalidTransaction(err) => {
                 return write!(f, "Invalid transaction, signature does not match: {err}");
-            },
+            }
             BlockchainError::InvalidNonce => "Nonce in transaction does not match nonce in ledger",
             BlockchainError::InvalidSenderAccount => "Account does not exist in ledger",
             BlockchainError::InvalidPath(err) => {
                 return write!(f, "Invalid path: {err}");
-            },
+            }
             BlockchainError::LedgerSerializationError(err) => {
                 return write!(f, "Error in ledger serialization: {err}");
-            },
+            }
             BlockchainError::InvalidNullAmount => "Cannot transfer a null amount",
             BlockchainError::InsufficientFunds => "Insufficient funds to conduct the transaction",
             BlockchainError::TransactionIntoSameAccount => {
@@ -58,7 +60,7 @@ impl From<SignatureError> for BlockchainError {
     }
 }
 
-impl From<SerializationError> for BlockchainError{
+impl From<SerializationError> for BlockchainError {
     fn from(err: SerializationError) -> Self {
         BlockchainError::LedgerSerializationError(err)
     }
@@ -87,9 +89,15 @@ impl fmt::Display for KeyError {
             KeyError::KeyOverwrite => "File already exists",
             KeyError::KeyNotFound => "File does not exist",
             KeyError::KeyDerivationError(err) => return write!(f, "Invalid password: {err}"),
-            KeyError::EncryptionError(err) => return write!(f, "Could not encrypt private key: {err}"),
-            KeyError::DecryptionError(err) => return write!(f, "Could not decrypt private key: {err}"),
-            KeyError::KeySerializeError(err) => return write!(f, "Error in key serialization: {err}"),
+            KeyError::EncryptionError(err) => {
+                return write!(f, "Could not encrypt private key: {err}");
+            }
+            KeyError::DecryptionError(err) => {
+                return write!(f, "Could not decrypt private key: {err}");
+            }
+            KeyError::KeySerializeError(err) => {
+                return write!(f, "Error in key serialization: {err}");
+            }
             KeyError::InvalidKeystoreFormat(err) => {
                 return write!(
                     f,
@@ -131,19 +139,19 @@ impl From<SerializationError> for KeyError {
 #[derive(Debug)]
 pub enum HexStringError {
     InvalidHexLength,
-    InvalidHex(ParseIntError)
+    InvalidHex(ParseIntError),
 }
 
 impl fmt::Display for HexStringError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-         HexStringError::InvalidHex(err) => return write!(f, "Invalid hex string: {err}"),
-         HexStringError::InvalidHexLength => "Hex string must have even length"
+            HexStringError::InvalidHex(err) => return write!(f, "Invalid hex string: {err}"),
+            HexStringError::InvalidHexLength => "Hex string must have even length",
         })
     }
 }
 
-impl From<ParseIntError> for HexStringError{
+impl From<ParseIntError> for HexStringError {
     fn from(err: ParseIntError) -> Self {
         HexStringError::InvalidHex(err)
     }

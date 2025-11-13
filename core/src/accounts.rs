@@ -1,9 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::serialization::pubkey;
 use crate::errors::{BlockchainError, KeyError};
-use crate::keys::{PublicKey, load_key, pubkey_to_hex, public_key_from_private, generate_and_save};
+use crate::keys::{PublicKey, generate_and_save, load_key, pubkey_to_hex, public_key_from_private};
+use crate::serialization::pubkey;
 
 /// Account containing a public key and a balance in torvalds
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,16 +15,15 @@ pub struct Account {
 }
 
 impl Account {
-
-    pub fn public_key(&self) -> PublicKey{
+    pub fn public_key(&self) -> PublicKey {
         self.public_key
     }
 
-    pub fn torvalds(&self) -> u64{
+    pub fn torvalds(&self) -> u64 {
         self.torvalds
     }
 
-    pub fn nonce(&self) -> u64{
+    pub fn nonce(&self) -> u64 {
         self.nonce
     }
 
@@ -54,11 +53,12 @@ impl Account {
         }
     }
 
-    pub fn with_balance(public_key: PublicKey, amount: u64) -> Self{
+    pub fn with_balance(public_key: PublicKey, amount: u64) -> Self {
         Self {
             public_key,
             torvalds: amount,
-            nonce: 0 }
+            nonce: 0,
+        }
     }
 
     /// Creates a new account from an encrypted private key stored in a JSON
@@ -90,7 +90,7 @@ impl Account {
         }
     }
 
-    pub(crate) fn increment_nonce(&mut self){
+    pub(crate) fn increment_nonce(&mut self) {
         self.nonce += 1;
     }
 }

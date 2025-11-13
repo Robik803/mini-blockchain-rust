@@ -1,13 +1,13 @@
+use crate::serialization::{pubkey, signature};
 use ed25519_dalek::{Digest, Signature};
+use serde::{self, Deserialize, Serialize};
 use sha2::Sha512;
 use std::cmp::PartialEq;
-use serde::{self, Serialize, Deserialize};
-use crate::serialization::{pubkey, signature};
 
+use crate::constants::CONTEXT;
 use crate::errors::BlockchainError;
 use crate::keys::{PublicKey, pubkey_to_hex};
-use crate::utils::{get_timestamp, encode_hex};
-use crate::constants::CONTEXT;
+use crate::utils::{encode_hex, get_timestamp};
 
 pub trait Message {
     fn sender(&self) -> &PublicKey;
@@ -33,8 +33,8 @@ pub trait Message {
     }
 
     fn hash(&self) -> [u8; 64] {
-    let pre = self.prehashed();
-    pre.finalize().into()
+        let pre = self.prehashed();
+        pre.finalize().into()
     }
 }
 
@@ -104,12 +104,17 @@ pub struct SignedTransaction {
 }
 
 impl SignedTransaction {
-    pub fn signature(&self) -> &Signature{
+    pub fn signature(&self) -> &Signature {
         &self.signature
     }
 
-    pub fn new(unsigned_tx: UnsignedTransaction, signature: Signature) -> Result<Self, BlockchainError>{
-        unsigned_tx.from.verify_prehashed(unsigned_tx.prehashed(), Some(CONTEXT), &signature)?;
+    pub fn new(
+        unsigned_tx: UnsignedTransaction,
+        signature: Signature,
+    ) -> Result<Self, BlockchainError> {
+        unsigned_tx
+            .from
+            .verify_prehashed(unsigned_tx.prehashed(), Some(CONTEXT), &signature)?;
         Ok(SignedTransaction {
             from: unsigned_tx.from,
             to: unsigned_tx.to,
@@ -168,7 +173,7 @@ impl std::fmt::Display for SignedTransaction {
 mod tests {
     use super::*;
     use rand::rngs::OsRng;
-    
+
     use crate::keys::KeyPair;
 
     #[test]
@@ -179,8 +184,7 @@ mod tests {
         let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
         let bob_pubkey = bob_keypair.verifying_key();
 
-        let unsigned_tx =
-            UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
+        let unsigned_tx = UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
 
         let signature = alice_keypair
             .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
@@ -195,24 +199,24 @@ mod tests {
         );
         assert!(signed_tx.eq(&signed_tx));
 
-        let transaction =
-            UnsignedTransaction::new(&alice_pubkey, &alice_pubkey, 50, 0);
-        assert!(matches!(transaction, Err(BlockchainError::TransactionIntoSameAccount)));
+        let transaction = UnsignedTransaction::new(&alice_pubkey, &alice_pubkey, 50, 0);
+        assert!(matches!(
+            transaction,
+            Err(BlockchainError::TransactionIntoSameAccount)
+        ));
     }
 
     #[test]
-    fn test_transaction_hash(){
+    fn test_transaction_hash() {
         let alice_keypair: KeyPair = KeyPair::generate(&mut OsRng);
         let alice_pubkey = alice_keypair.verifying_key();
 
         let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
         let bob_pubkey = bob_keypair.verifying_key();
 
-        let unsigned_tx_1 =
-            UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
-        let unsigned_tx_2 =
-            UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
-            
+        let unsigned_tx_1 = UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
+        let unsigned_tx_2 = UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
+
         assert_eq!(unsigned_tx_1.hash(), unsigned_tx_2.hash())
     }
 }
