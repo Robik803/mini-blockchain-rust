@@ -99,6 +99,20 @@ pub struct SignedTransaction {
     pub signature: Signature,
 }
 
+impl SignedTransaction {
+    pub fn new(unsigned_tx: UnsignedTransaction, signature: Signature) -> Result<Self, BlockchainError>{
+        unsigned_tx.from.verify_prehashed(unsigned_tx.prehashed(), Some(CONTEXT), &signature)?;
+        Ok(SignedTransaction {
+            from: unsigned_tx.from,
+            to: unsigned_tx.to,
+            amount: unsigned_tx.amount,
+            nonce: unsigned_tx.nonce,
+            timestamp: unsigned_tx.timestamp,
+            signature,
+        })
+    }
+}
+
 impl Message for SignedTransaction {
     fn sender(&self) -> &PublicKey {
         &self.from
@@ -143,54 +157,37 @@ impl std::fmt::Display for SignedTransaction {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use crate::accounts::Account;
-    use crate::keys::{KeyPair, load_key};
-    use crate::transactions::{CONTEXT, Message, SignedTransaction, UnsignedTransaction};
+    use super::*;
+    use rand::rngs::OsRng;
+    
+    use crate::keys::KeyPair;
 
     #[test]
     fn test_transaction() {
-        let (mut alice, alice_path) = Account::new("123").unwrap();
-        let (bob, bob_path) = Account::new("123").unwrap();
+        let alice_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let alice_pubkey = alice_keypair.verifying_key();
 
-        alice.deposit(300);
-
-        let alice_private_key = load_key("123", &alice_path).unwrap();
-        let alice_keypair = KeyPair::from_bytes(&alice_private_key);
+        let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let bob_pubkey = bob_keypair.verifying_key();
 
         let unsigned_tx =
-            UnsignedTransaction::new(&alice.public_key, &bob.public_key, 50, alice.nonce).unwrap();
+            UnsignedTransaction::new(&alice_pubkey, &bob_pubkey, 50, 0).unwrap();
 
         let signature = alice_keypair
             .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
             .unwrap();
 
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
+        let signed_tx = SignedTransaction::new(unsigned_tx, signature).unwrap();
 
         assert!(
-            alice
-                .public_key
+            alice_pubkey
                 .verify_prehashed(signed_tx.prehashed(), Some(CONTEXT), &signed_tx.signature)
                 .is_ok()
         );
         assert!(signed_tx.eq(&signed_tx));
 
         let transaction =
-            UnsignedTransaction::new(&alice.public_key, &alice.public_key, 50, alice.nonce);
-        assert!(transaction.is_err());
-
-        #[allow(unused)]
-        {
-            fs::remove_file(alice_path);
-            fs::remove_file(bob_path);
-        }
+            UnsignedTransaction::new(&alice_pubkey, &alice_pubkey, 50, 0);
+        assert!(matches!(transaction, Err(BlockchainError::TransactionIntoSameAccount)));
     }
 }

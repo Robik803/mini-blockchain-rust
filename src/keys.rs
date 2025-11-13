@@ -235,6 +235,7 @@ pub fn load_key(password: &str, path: &Path) -> Result<[u8; 32], KeyError> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -273,20 +274,28 @@ mod tests {
         let dir = ensure_keys_dir_exists().unwrap();
         let path = dir.join(format!("{pubkey_hex}.json"));
 
-        match save_key(password, &path, &private_key) {
-            Ok(_) => println!("Key saved succesfully"),
-            Err(e) => println!("{:?}", e),
-        }
+        let _ = save_key(password, &path, &private_key);
 
-        let private_key_2 = match load_key(password, &path) {
-            Ok(pk) => pk,
-            Err(e) => {
-                println!("{:?}", e);
-                [0u8; 32]
-            }
-        };
+        let private_key_2 = load_key(password, &path).unwrap();
 
         assert_eq!(private_key, private_key_2);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_generate_key() {
+        let password = "1234prueba";
+
+        let (public_key, path) = generate_and_save(password).unwrap();
+
+        let private_key = load_key(password, &path).unwrap();
+
+        let keypair = KeyPair::from_bytes(&private_key);
+
+        let public_key_2 = keypair.verifying_key();
+
+        assert_eq!(public_key, public_key_2);
 
         let _ = fs::remove_file(path);
     }

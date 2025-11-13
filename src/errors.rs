@@ -7,6 +7,7 @@ use std::{fmt, num::ParseIntError};
 #[derive(Debug)]
 pub enum BlockchainError {
     // Ledger errors
+    LedgerCreationError,
     InvalidTransaction(SignatureError),
     InvalidNonce,
     InvalidSenderAccount,
@@ -22,6 +23,7 @@ pub enum BlockchainError {
 impl fmt::Display for BlockchainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            BlockchainError::LedgerCreationError => "Cannot create a ledger where the same account appears multiple times in definition",
             BlockchainError::InvalidTransaction(err) => {
                 return write!(f, "Invalid transaction, signature does not match: {err}");
             },

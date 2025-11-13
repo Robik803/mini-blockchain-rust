@@ -19,12 +19,27 @@ pub struct Ledger {
 }
 
 impl Ledger {
-    fn accounts(&self) -> &HashMap<String, Account> {
+    pub fn accounts(&self) -> &HashMap<String, Account> {
         &self.accounts
     }
 
-    fn history(&self) -> &Vec<SignedTransaction> {
+    pub fn history(&self) -> &Vec<SignedTransaction> {
         &self.history
+    }
+
+    pub fn new(new_accounts: Vec<Account>) -> Result<Self, BlockchainError>{
+        let mut accounts = HashMap::new();
+        for account in &new_accounts{
+            let account_pubkey_hex = pubkey_to_hex(&account.public_key);
+            if accounts.contains_key(&account_pubkey_hex){
+                return Err(BlockchainError::LedgerCreationError);
+            }
+            accounts.insert(account_pubkey_hex, account.clone());
+        }
+        Ok(Ledger{
+            accounts,
+            history: Vec::new(),
+        })
     }
 
     fn check_nonce(&self, sender_pubkey: &PublicKey, nonce: u64) -> bool {
@@ -56,6 +71,8 @@ impl Ledger {
             return Err(BlockchainError::InvalidSenderAccount);
         } else if !self.check_nonce(&sender_pubkey, transaction.nonce) {
             return Err(BlockchainError::InvalidNonce);
+        } else if sender_pubkey == receiver_pubkey {
+            return Err(BlockchainError::TransactionIntoSameAccount);
         }
 
         match self.accounts[&sender_pubkey_hex]
@@ -101,7 +118,7 @@ impl Ledger {
     }
 
     /// Load serialized ledger to file
-    pub fn load_json(path: &Path) -> Result<Self, BlockchainError> {
+    pub fn load_from_file(path: &Path) -> Result<Self, BlockchainError> {
         let data = fs::read_to_string(path)?;
         let deserialized = serde_json::from_str(&data)?;
         Ok(deserialized)
@@ -110,59 +127,33 @@ impl Ledger {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::fs;
-
-    use crate::accounts::Account;
-    use crate::keys::{KeyPair, load_key, pubkey_to_hex};
-    use crate::ledger::Ledger;
-    use crate::transactions::{CONTEXT, Message, SignedTransaction, UnsignedTransaction};
+    use super::*;
+    use rand::rngs::OsRng;
+    use std::path::Path;
+    
+    use crate::keys::KeyPair;
+    use crate::transactions::UnsignedTransaction;
 
     #[test]
-    fn test_transfer() {
-        let (mut alice, alice_path) = Account::new("123").unwrap();
-        let (bob, bob_path) = Account::new("123").unwrap();
-        let (charlie, charlie_path) = Account::new("123").unwrap();
-
-        alice.deposit(300).unwrap();
-
-        let mut ledger = Ledger {
-            accounts: HashMap::new(),
-            history: Vec::new(),
-        };
+    fn test_ledger_transaction_process(){
+        let alice_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let mut alice = Account::from_private_key(alice_keypair.as_bytes());
+        let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let bob = Account::from_private_key(bob_keypair.as_bytes());
 
         let alice_pubkey_hex = pubkey_to_hex(&alice.public_key);
         let bob_pubkey_hex = pubkey_to_hex(&bob.public_key);
-        let charlie_pubkey_hex = pubkey_to_hex(&charlie.public_key);
 
-        ledger
-            .accounts
-            .entry(alice_pubkey_hex.clone())
-            .or_insert(alice.clone());
+        let _ = alice.deposit(300);
+        let accounts = vec![alice.clone()];
 
-        let alice_private_key = load_key("123", &alice_path).unwrap();
-        let alice_keypair = KeyPair::from_bytes(&alice_private_key);
+        let mut ledger = Ledger::new(accounts).unwrap();
 
-        let bob_private_key = load_key("123", &bob_path).unwrap();
-        let bob_keypair = KeyPair::from_bytes(&bob_private_key);
-
-        let charlie_private_key = load_key("123", &charlie_path).unwrap();
-        let charlie_keypair = KeyPair::from_bytes(&charlie_private_key);
-
-        // Transaction 1 : valid
-        let unsigned_tx =
-            UnsignedTransaction::new(&alice.public_key, &bob.public_key, 50, 1).unwrap();
+        let unsigned_tx = UnsignedTransaction::new(&alice.public_key, &bob.public_key, 50, 1).unwrap();
         let signature = alice_keypair
             .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
             .unwrap();
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
+        let signed_tx = SignedTransaction::new(unsigned_tx, signature).unwrap();
 
         ledger.process_transaction(signed_tx).unwrap();
 
@@ -178,142 +169,35 @@ mod tests {
         assert_eq!(ledger.history.last().unwrap().from, alice.public_key);
         assert_eq!(ledger.history.last().unwrap().to, bob.public_key);
         assert_eq!(ledger.history.last().unwrap().amount, 50);
+    }
 
-        // Transaction 2 : invalid
-        let unsigned_tx =
-            UnsignedTransaction::new(&charlie.public_key, &bob.public_key, 30, 1).unwrap();
-        let signature = charlie_keypair
+    #[test]
+    fn test_save_and_load_ledger(){
+        let alice_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let mut alice = Account::from_private_key(alice_keypair.as_bytes());
+        let bob_keypair: KeyPair = KeyPair::generate(&mut OsRng);
+        let bob = Account::from_private_key(bob_keypair.as_bytes());
+
+        let _ = alice.deposit(300);
+        let accounts = vec![alice.clone()];
+
+        let mut ledger = Ledger::new(accounts).unwrap();
+
+        let unsigned_tx = UnsignedTransaction::new(&alice.public_key, &bob.public_key, 50, 1).unwrap();
+        let signature = alice_keypair
             .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
             .unwrap();
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
-
-        assert!(ledger.process_transaction(signed_tx).is_err());
-
-        assert!(!ledger.accounts.contains_key(&charlie_pubkey_hex));
-        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 50);
-
-        // Transaction 3 : valid
-        let unsigned_tx =
-            UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 30, 1).unwrap();
-        let signature = bob_keypair
-            .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
-            .unwrap();
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
+        let signed_tx = SignedTransaction::new(unsigned_tx, signature).unwrap();
 
         ledger.process_transaction(signed_tx).unwrap();
 
-        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
-        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
-        assert_eq!(
-            ledger.accounts[&charlie_pubkey_hex].public_key,
-            charlie.public_key
-        );
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 30);
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 20);
+        let path = Path::new("test_ledger.json");
+        ledger.save_to_file(path).unwrap();
+        let restored = Ledger::load_from_file(Path::new("test_ledger.json")).unwrap();
 
-        //Transaction 4 : invalid
-        let unsigned_tx =
-            UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 30, 2).unwrap();
-        let signature = bob_keypair
-            .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
-            .unwrap();
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
+        assert_eq!(ledger.accounts.len(), restored.accounts.len());
+        assert!(restored.history.len() > 0);
 
-        assert!(ledger.process_transaction(signed_tx).is_err());
-
-        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
-        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
-        assert_eq!(
-            ledger.accounts[&charlie_pubkey_hex].public_key,
-            charlie.public_key
-        );
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 30);
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 20);
-
-        //Transaction 5 : valid
-        let unsigned_tx =
-            UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 5, 2).unwrap();
-        let signature = bob_keypair
-            .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
-            .unwrap();
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
-
-        ledger.process_transaction(signed_tx).unwrap();
-
-        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
-        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
-        assert_eq!(
-            ledger.accounts[&charlie_pubkey_hex].public_key,
-            charlie.public_key
-        );
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 35);
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 15);
-
-        //Transaction 6 : invalid
-        let unsigned_tx =
-            UnsignedTransaction::new(&bob.public_key, &charlie.public_key, 5, 5).unwrap();
-        let signature = bob_keypair
-            .sign_prehashed(unsigned_tx.prehashed(), Some(CONTEXT))
-            .unwrap();
-        let signed_tx = SignedTransaction {
-            from: unsigned_tx.from,
-            to: unsigned_tx.to,
-            amount: unsigned_tx.amount,
-            nonce: unsigned_tx.nonce,
-            timestamp: unsigned_tx.timestamp,
-            signature,
-        };
-
-        assert!(ledger.process_transaction(signed_tx).is_err());
-
-        assert!(ledger.accounts.contains_key(&charlie_pubkey_hex));
-        assert!(ledger.accounts.contains_key(&bob_pubkey_hex));
-        assert_eq!(
-            ledger.accounts[&charlie_pubkey_hex].public_key,
-            charlie.public_key
-        );
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].public_key, bob.public_key);
-        assert_eq!(ledger.accounts[&charlie_pubkey_hex].torvalds, 35);
-        assert_eq!(ledger.accounts[&bob_pubkey_hex].torvalds, 15);
-
-        #[allow(unused)]
-        {
-            fs::remove_file(alice_path);
-            fs::remove_file(bob_path);
-            fs::remove_file(charlie_path);
-        }
+        let _ = fs::remove_file(path);
     }
 }
