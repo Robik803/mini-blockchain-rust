@@ -128,8 +128,8 @@ src/
 ├─ utils.rs # Utilities
 ├─ errors.rs # Error handling
 ├─ lib.rs
-└─ tests/
-   └─ integration_test.rs
+tests/
+└─ integration_test.rs
 ```
 
 ## 🎯 Roadmap
