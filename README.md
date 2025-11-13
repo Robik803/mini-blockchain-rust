@@ -1,4 +1,4 @@
-# 🌐 mini-blockchain-rust (Workspace)
+# 🌐 mini-blockchain-rust (Workspace) [![CI](https://github.com/Robik803/mini-blockchain-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/Robik803/mini-blockchain-rust/actions/workflows/ci.yml)
 
 This repository contains a modular Rust workspace implementing a minimal, deterministic blockchain prototype.
 The project is intentionally split into multiple crates to mirror the structure of real-world blockchain ecosystems:
