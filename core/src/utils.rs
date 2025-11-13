@@ -13,7 +13,7 @@ pub(crate) fn get_timestamp() -> u64 {
 
 /// Decode a vector of bytes from a string
 pub(crate) fn decode_hex(s: &str) -> Result<Vec<u8>, HexStringError> {
-    if s.len().is_multiple_of(2) {
+    if !s.len().is_multiple_of(2) {
         return Err(HexStringError::InvalidHexLength);
     }
     let hex_result: Result<Vec<u8>, ParseIntError> = (0..s.len())
