@@ -111,6 +111,7 @@ All modules have tests verifying:
 - JSON keystore validity
 - Transaction creation
 - Transaction processing by Ledger
+- Complete flow integration test
 
 **All tests currently passing ✅**
 
@@ -126,7 +127,9 @@ src/
 ├─ transactions.rs # Transaction structure
 ├─ utils.rs # Utilities
 ├─ errors.rs # Error handling
-└─ lib.rs
+├─ lib.rs
+└─ tests/
+   └─ integration_test.rs
 ```
 
 ## 🎯 Roadmap
@@ -141,7 +144,6 @@ src/
 
 ### Next Steps 🚧
 - Build CLI for wallet commands
-- Persist ledger state
 
 ### Later 🚀
 - Blocks or PoH-like history
@@ -158,5 +160,5 @@ This is not a cryptocurrency — it’s a **hands-on educational blockchain simu
 ## 🧠 Status
 
 > **Actively being built.**  
-Core cryptography, accounts and first ledger prototype complete.  
-Now entering **Instructions implementation** phase.
+Core program complete.  
+Now entering **CLI** phase.
